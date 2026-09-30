@@ -7,7 +7,7 @@ GPU only: if CUDA or the model is unavailable, available() is False and callers 
 import asyncio, os, threading
 
 MODEL = os.getenv("NLI_MODEL", "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli")
-BATCH = 16
+BATCH = int(os.getenv("NLI_BATCH", "64"))
 _lock = threading.Lock()
 _state: dict = {}          # {"tok", "model", "labels"} once loaded, {"error"} if it cannot be
 
@@ -45,18 +45,19 @@ def _judge_sync(pairs):
     import torch
     s = _load()
     tok, model, labels = s["tok"], s["model"], s["labels"]
-    out = []
-    for i in range(0, len(pairs), BATCH):
-        chunk = pairs[i:i + BATCH]
+    order = sorted(range(len(pairs)), key=lambda i: len(pairs[i][0]) + len(pairs[i][1]))   # similar lengths per batch: less padding
+    res = [None] * len(pairs)
+    for i in range(0, len(order), BATCH):
+        idx = order[i:i + BATCH]
+        chunk = [pairs[j] for j in idx]
         enc = tok([p for p, _ in chunk], [h for _, h in chunk], truncation="only_first", max_length=512,
                   padding=True, return_tensors="pt").to("cuda")
         with torch.inference_mode():
             probs = model(**enc).logits.float().softmax(-1).cpu().tolist()
-        for row in probs:
-            d = {labels[j]: p for j, p in enumerate(row)}
-            out.append({"entail": d.get("entailment", 0.0), "neutral": d.get("neutral", 0.0),
-                        "contradict": d.get("contradiction", 0.0)})
-    return out
+        for j, row in zip(idx, probs):
+            d = {labels[k]: p for k, p in enumerate(row)}
+            res[j] = {"entail": d.get("entailment", 0.0), "neutral": d.get("neutral", 0.0), "contradict": d.get("contradiction", 0.0)}
+    return res
 
 
 async def judge(pairs: list[tuple[str, str]]) -> list[dict]:

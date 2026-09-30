@@ -60,8 +60,8 @@ AUTHORS = re.compile(r"^[A-Z][\w'’-]+,\s(?:[A-Z]\.\s?)+")   # "Fani, V., Mazzo
 
 
 def is_citation(s):
-    """Reference-list entry, not a claim. Also drops lines with too few ordinary words to state anything."""
-    return bool(CITATION.search(s) or AUTHORS.search(s)) or len(re.findall(r"\b[a-z]{3,}\b", s)) < 5
+    """Reference-list entry by FORMAT (DOI, URL, author list, trailing year) — layout parsing, not a judgement of meaning."""
+    return bool(CITATION.search(s) or AUTHORS.search(s))
 
 
 RISK, OPP, FACT, OPIN, POS, NEG, BOIL = (re.compile(x, re.I) for x in
@@ -79,24 +79,57 @@ def split_sentences(text):
     for para_i, para in enumerate(re.split(r"\n\s*\n|\n", text)):
         for s in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'“])", para.strip()):
             s = s.strip(" -•*#\t")
-            if 25 <= len(s) <= 450 and not BOIL.search(s) and not s.endswith("?") and not is_citation(s):
+            if 25 <= len(s) <= 450 and not s.endswith("?") and not is_citation(s):
                 out.append((para_i, s))
     return out
 
 
-def analyse(sentence, source_type):
-    """Classify one sentence. Returns dict or None if it carries no research signal."""
+# ---------- meaning: zero-shot classifier (GPU entailment model) ----------
+INFORMATIVE = "This is an informative sentence, not a citation, menu, title or advertisement."
+INFORMATIVE_MIN = 0.1          # raw entailment; calibration knob (junk scored <=0.10, real sentences >=0.13 on the check set)
+KINDS = {"fact": "This sentence reports a specific fact, figure, price, date or event about a business or market.",
+         "opinion": "This sentence is someone's personal opinion, review or experience.",
+         "risk": "This sentence describes a risk, problem, complaint, failure or obstacle.",
+         "opportunity": "This sentence describes growth, demand, an advantage or a business opportunity."}
+SENTIMENT = {"risk": -1, "opportunity": 1}
+
+
+def _epistemic(kind, source_type):
+    if kind == "fact":
+        return "verified" if source_type in ("official", "structured") else "reference" if source_type == "reference" else "reported"
+    return "reported" if source_type in ("official", "reference", "news", "research") else "opinion"
+
+
+async def analyse_many(sentences: list[str], source_types: list[str]) -> list[dict | None]:
+    """Classify sentences with the zero-shot classifier. Falls back to the cue-list heuristic only if the GPU model is absent."""
+    from .. import nli, classify
+    if not sentences:
+        return []
+    if not nli.available():
+        return [analyse(s, t, fallback=True) for s, t in zip(sentences, source_types)]
+    info = await nli.judge([(s, INFORMATIVE) for s in sentences])
+    keep = [i for i, x in enumerate(info) if x["entail"] >= INFORMATIVE_MIN]
+    kinds = await classify.best([sentences[i] for i in keep], KINDS)
+    out = [None] * len(sentences)
+    for i, (kind, p) in zip(keep, kinds):
+        out[i] = {"kind": kind, "kind_confidence": round(p, 3), "epistemic": _epistemic(kind, source_types[i]),
+                  "sentiment": SENTIMENT.get(kind, 0), "prices": PRICE_RE.findall(sentences[i]),
+                  "informative": round(info[i]["entail"], 3), "classified_by": "nli"}
+    return out
+
+
+def analyse(sentence, source_type, fallback=False):
+    """Heuristic cue-list analysis — used ONLY when the classifier model is unavailable. Returns dict or None."""
+    if fallback and BOIL.search(sentence):
+        return None
     prices = PRICE_RE.findall(sentence)
     risk, opp, fact, opin = bool(RISK.search(sentence)), bool(OPP.search(sentence)), bool(FACT.search(sentence) or prices), bool(OPIN.search(sentence))
     pos, neg = len(POS.findall(sentence)), len(NEG.findall(sentence))
     if not (risk or opp or fact or opin or pos or neg):
         return None
     kind = "opinion" if opin else "risk" if risk else "opportunity" if opp else "fact" if fact else "opinion"
-    if kind == "fact":
-        epistemic = "verified" if source_type in ("official", "structured") else "reference" if source_type == "reference" else "reported"
-    else:
-        epistemic = "reported" if source_type in ("official", "reference", "news", "research") else "opinion"
-    return {"kind": kind, "epistemic": epistemic, "sentiment": (pos > neg) - (neg > pos), "prices": prices}
+    return {"kind": kind, "epistemic": _epistemic(kind, source_type), "sentiment": (pos > neg) - (neg > pos), "prices": prices,
+            "classified_by": "heuristic"}
 
 
 if __name__ == "__main__":
@@ -110,6 +143,7 @@ if __name__ == "__main__":
                 "Gwozdz, W., Nielsen, K.S. and Müller, T. (2017) 'An environmental perspective on clothing consumption', Sustainability, 9(5), p."]:
         assert is_citation(ref), ref
     assert not is_citation("Yulu raised $82 million in 2021 and operates about 18,000 scooters in Bengaluru.")
+    assert not is_citation("Yulu's monthly plan costs Rs 1,499 in Bengaluru.")     # short real sentences are kept
     assert not is_citation("Bounce faces rising costs and several customers report poor battery life.")
     assert classify_source("https://www.reddit.com/r/bangalore/comments/x") == "forum"
     assert classify_source("https://morth.nic.in/x") == "official"

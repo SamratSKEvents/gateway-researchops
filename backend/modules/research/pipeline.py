@@ -272,26 +272,29 @@ class Run:
         per_src = Counter()
         self._claimed = getattr(self, "_claimed", set())
         before = len(self.claims)
+        cands = []    # (sid, para, sentence, task ids) — classified in one GPU batch below
         for sid, text in self._texts():
             if sid in self._claimed:
                 continue
             self._claimed.add(sid)
-            stype, src_tasks = self.sources[sid]["type"], self.sources[sid].get("tasks", [])
+            src_tasks = self.sources[sid].get("tasks", [])
             seen = set()
             for para, sent in X.split_sentences(text):
                 key = X.norm(sent)[:120]
                 if key in seen:
                     continue
                 seen.add(key)
-                a = X.analyse(sent, stype)
-                if not a:
-                    continue
                 words = set(X.norm(sent).split())
                 tids = [tid for tid, tw in task_words.items() if len(words & tw) >= 2] or src_tasks
                 if not tids and not self._relevant(sent):
                     continue
-                self.add_claim(sent, sid, a, tids, {"para": para, "snippet": sid not in self.docs})
-                per_src[sid] += 1
+                cands.append((sid, para, sent, tids))
+        labels = await X.analyse_many([c[2] for c in cands], [self.sources[c[0]]["type"] for c in cands])
+        for (sid, para, sent, tids), a in zip(cands, labels):
+            if not a:
+                continue
+            self.add_claim(sent, sid, a, tids, {"para": para, "snippet": sid not in self.docs})
+            per_src[sid] += 1
         kinds = Counter(c["kind"] for c in self.claims.values())
         epi = Counter(c["epistemic"] for c in self.claims.values())
         by_src = [{"source": sid, "domain": self.sources[sid]["domain"], "type": self.sources[sid]["type"], "claims": n,
