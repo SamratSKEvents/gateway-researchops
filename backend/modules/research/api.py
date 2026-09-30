@@ -9,13 +9,18 @@ router = APIRouter(prefix="/api/research", tags=["research"])
 
 class ResearchReq(BaseModel):
     query: str
+    scope: str | None = None          # e.g. "e-scooter subscriptions for students"
+    geography: str | None = None      # e.g. "Bengaluru"
+    time_range: str | None = None     # e.g. "launch within 12 months"
+    depth: str | None = None          # quick | standard | deep  (follow-up research rounds: 0 / 1 / 2)
 
 
 @router.post("")
 async def research(req: ResearchReq):
     if not req.query.strip():
         raise HTTPException(400, "empty query")
-    return {"id": service.start_research(req.query)}
+    scope = {k: getattr(req, k) for k in ("scope", "geography", "time_range", "depth")}
+    return {"id": service.start_research(req.query, scope)}
 
 
 class ReplyReq(BaseModel):

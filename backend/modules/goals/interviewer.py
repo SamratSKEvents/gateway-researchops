@@ -1,6 +1,7 @@
 """Asks open questions until the decision, scope and success criteria are clear. The run does not start before this."""
 import re
 from ..ai_runtime import chat_json
+from .. import nli
 
 MAX_QUESTIONS = 3
 SKIP = {"skip", "no", "n/a", "na", "-", "none", "proceed", "go", "go ahead", "start"}
@@ -27,19 +28,31 @@ def _same(a, b):
     return len(wa & wb) / (len(wa | wb) or 1) > 0.45
 
 
-def _transcript(query, qa):
-    return f"Research question: {query}\n" + "".join(f"\nQ: {x['q']}\nA: {x['a']}" for x in qa)
+def _transcript(query, qa, known=""):
+    return (f"Research question: {query}\n" + (f"Already specified by the user (do not ask about these): {known}\n" if known else "")
+            + "".join(f"\nQ: {x['q']}\nA: {x['a']}" for x in qa))
 
 
-async def next_step(query: str, qa: list[dict], llm=chat_json) -> dict:
+async def _repeats(q, asked) -> bool:
+    """Same question asked again? The entailment model checks both directions; lexical overlap only if the GPU model is absent."""
+    if not asked:
+        return False
+    if nli.available():
+        sc = await nli.judge([(a, q) for a in asked] + [(q, a) for a in asked])
+        n = len(asked)
+        return any(sc[i]["entail"] >= 0.8 and sc[n + i]["entail"] >= 0.8 for i in range(n))
+    return any(_same(q, a) for a in asked)
+
+
+async def next_step(query: str, qa: list[dict], llm=chat_json, known: str = "") -> dict:
     """qa: [{q, a}] so far -> {ready, question, goal, missing, how}. Ready after MAX_QUESTIONS or if the user skips."""
     forced = len(qa) >= MAX_QUESTIONS or (qa and qa[-1]["a"].strip().lower() in SKIP)
-    goal = _transcript(query, [x for x in qa if x["a"].strip().lower() not in SKIP])   # the goal is the user's own words, not a paraphrase
+    goal = _transcript(query, [x for x in qa if x["a"].strip().lower() not in SKIP], known)   # the goal is the user's own words, not a paraphrase
     try:
-        j = await llm("goals.interview", SYSTEM, _transcript(query, qa) + ("\n\nThe interview is over: set ready=true." if forced else ""),
+        j = await llm("goals.interview", SYSTEM, _transcript(query, qa, known) + ("\n\nThe interview is over: set ready=true." if forced else ""),
                       SCHEMA, 600)
         q = str(j["question"]).strip()
-        repeat = any(_same(q, x["q"]) for x in qa)
+        repeat = await _repeats(q, [x["q"] for x in qa])
         out = {"ready": bool(j["ready"]) or forced or repeat, "question": q, "goal": goal,
                "missing": [str(m) for m in j.get("missing", [])], "how": "model"}
     except Exception as e:   # model down: one generic open question, then proceed on the question as stated

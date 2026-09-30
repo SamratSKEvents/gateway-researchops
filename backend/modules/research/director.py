@@ -19,9 +19,15 @@ COURT_CLAIMS = 3          # background hearings after the report
 CHALLENGE_TOP = 8         # claims the verdict leans on most get challenged and re-researched
 
 
+DEPTH_ROUNDS = {"quick": 0, "standard": 1, "deep": 2}
+
+
 class Director(Run):
-    def __init__(self, query):
+    def __init__(self, query, scope: dict | None = None):
         super().__init__(query)
+        self.scope = {k: str(v).strip() for k, v in (scope or {}).items() if v and str(v).strip()}
+        self.max_rounds = DEPTH_ROUNDS.get(self.scope.get("depth", "").lower(), MAX_ROUNDS)
+        self.result["scope"] = self.scope
         self.qa, self.goal, self.hyp = [], None, None
         self.labels, self.stance_done, self.asked, self.voi_log = [], set(), set(), []
         self.pending, self._reply, self.goal_change = None, None, None
@@ -60,7 +66,7 @@ class Director(Run):
             await self.stage("hypotheses", "Hypotheses & assumptions", self.hypotheses, required=True)
             await self.stage("plan", "Break the question into research tasks", self.plan, required=True)
             await self.research_round(0, self.queries, community=True, budget=None)
-            for r in range(1, MAX_ROUNDS + 1):
+            for r in range(1, self.max_rounds + 1):
                 if not await self.stage("voi", f"Value of information — round {r}", lambda r=r: self.voi_round(r)):
                     break
                 if not self._followups:
@@ -125,7 +131,8 @@ class Director(Run):
     # ---------- hearing ----------
     async def interview(self):
         while True:
-            step = await goals.next_step(self.query, self.qa)
+            known = "; ".join(f"{k.replace('_', ' ')}: {v}" for k, v in self.scope.items() if k != "depth")
+            step = await goals.next_step(self.query, self.qa, known=known)
             if step["ready"]:
                 break
             ans = await self.ask("interview", {"title": "Goal interview", "question": step["question"], "missing": step["missing"],

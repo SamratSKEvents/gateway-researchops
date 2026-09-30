@@ -7,8 +7,8 @@ from .paths import RUNS
 live: dict[str, Director] = {}
 
 
-def start_research(query: str) -> str:
-    run = Director(query)
+def start_research(query: str, scope: dict | None = None) -> str:
+    run = Director(query, scope)
     live[run.id] = run
     asyncio.create_task(run.execute())
     return run.id
