@@ -120,6 +120,7 @@ function bumpCounters(ev) {
 
 function finish(snap) {
   D = snap;
+  Graph.enrich(snap);
   loadRecent();
   if (!D.result?.plan) { $("#brief").innerHTML = `<div class="waiting">Research did not complete. Inspect the failed step in the log.</div>`; $("#briefWaiting").hidden = true; return; }
   $("#runTitle").textContent = D.result.plan.subject;
