@@ -294,3 +294,24 @@ ul.struck li { color: var(--ink3); text-decoration: line-through; text-decoratio
 .kg-legend i.lg-rel { width: 18px; border-top: 1.5px dashed var(--accent2); }
 .kg-legend i.lg-badge { width: 14px; height: 9px; border: 1.5px solid var(--exp); border-radius: 2px; }
 .kg-fit { position: absolute; right: 14px; top: 12px; background: var(--bg2); border: 1px solid var(--line2); color: var(--ink2); padding: 4px 12px; border-radius: 8px; font-size: 12px; }
+
+/* flow layout */
+.kg-node { transition: transform .45s ease, opacity .3s; }
+.kg-link.flow { fill: none; stroke: var(--ink3); stroke-width: 1.6; }
+.kg-link.rel { fill: none; stroke-width: 1.2; stroke-dasharray: none; stroke-opacity: .55; }
+.kg-link.rel.src { stroke: var(--line2); stroke-opacity: .9; }
+.kg-link.rel.pos { stroke: #6fd39a; } .kg-link.rel.neg { stroke: var(--warn); }
+.kgc-claim, .kgc-src { display: grid; align-items: center; gap: 7px; }
+.kgc.kgc-claim, .kgc.kgc-source { padding: 6px 9px; border-radius: 7px; box-shadow: none; }
+.kgc-claim { grid-template-columns: 12px 1fr auto; font-size: 11px; line-height: 1.3; color: var(--ink); }
+.kgc-claim b { font-size: 10px; } .kgc-claim.pos b { color: #6fd39a; } .kgc-claim.neg b { color: var(--warn); }
+.kgc-claim small, .kgc-src small { font: 9.5px var(--mono); color: var(--ink3); }
+.kgc-src { grid-template-columns: 9px 1fr auto; font-size: 11.5px; }
+.kgc-src i { width: 9px; height: 9px; border-radius: 50%; background: var(--rep); }
+.kgc-src i.t-official, .kgc-src i.t-news { background: var(--fact); } .kgc-src i.t-forum, .kgc-src i.t-review { background: var(--exp); }
+.kgc-src i.t-research, .kgc-src i.t-reference { background: var(--inf); } .kgc-src i.t-company { background: var(--accent2); }
+.kgc-src span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kg-legend i.lg-src { width: 14px; height: 9px; border: 1.5px solid var(--line2); border-radius: 3px; }
+.kg-legend i.lg-rel { border-top: 1.5px solid #6fd39a; }
+.kg-link.rel.faint { stroke-opacity: .22; stroke-dasharray: 4 3; }
+.kg-fit { top: auto; bottom: 40px; }
