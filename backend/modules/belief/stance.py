@@ -74,10 +74,17 @@ async def label(hypotheses: list[dict], claims: list[dict], done: set, llm=chat_
         cand = candidates(h, claims, done)
         done |= {(h["id"], c["id"]) for c in cand}
         jobs += [(h, cand[i:i + BATCH]) for i in range(0, len(cand), BATCH)]
-    if jobs and llm is chat_json and nli.available():   # GPU entailment model: reproducible labels, no LLM call
+    decided = []
+    if jobs and llm is chat_json and nli.available():
+        # GPU entailment model settles direct support / contradiction reproducibly; evidence that bears on the hypothesis only
+        # indirectly (most business evidence) scores neutral there and goes to the LLM labeller instead of being dropped.
         try:
-            return await _label_nli([(h, c) for h, b in jobs for c in b]), done, 0
-        except Exception:   # noqa: BLE001 — fall through to the LLM
-            pass
+            pairs = [(h, c) for h, b in jobs for c in b]
+            decided = await _label_nli(pairs)
+            settled = {(x["hypothesis"], x["claim"]) for x in decided}
+            left = [(h, [c for c in b if (h["id"], c["id"]) not in settled]) for h, b in jobs]
+            jobs = [(h, b) for h, b in left if b]
+        except Exception:   # noqa: BLE001 — the LLM labels everything
+            decided = []
     res = await asyncio.gather(*(_label(h, b, llm) for h, b in jobs), return_exceptions=True)
-    return [x for r in res if not isinstance(r, Exception) for x in r], done, sum(isinstance(r, Exception) for r in res)
+    return decided + [x for r in res if not isinstance(r, Exception) for x in r], done, sum(isinstance(r, Exception) for r in res)

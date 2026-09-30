@@ -68,8 +68,10 @@ async def ask(bel: dict, question: str, claims: dict, llm=chat_json) -> dict:
            + "\nEVIDENCE:\n" + "\n".join(f"[{e['claim']}] ({'supports' if e['stance'] > 0 else 'opposes'} {e['hypothesis']}) {claims[e['claim']]['text']}" for e in shown)
            + f"\n\nWHAT-IF QUESTION: {question}")
     j = await llm("whatif.ask", ASK_SYSTEM, ctx, ASK_SCHEMA, 900) or {}
-    ch = {"assumptions": {x["id"]: x["p"] for x in j.get("assumptions", []) if "id" in x},
-          "priors": {x["id"]: x["prior"] for x in j.get("priors", []) if "id" in x},
+    cur_a = {a["id"]: a["p"] for a in bel["assumptions"]}
+    cur_h = {h["id"]: h["prior"] for h in bel["hypotheses"]}
+    ch = {"assumptions": {x["id"]: x["p"] for x in j.get("assumptions", []) if "id" in x and abs(_clip(x["p"]) - cur_a.get(x["id"], -1)) > 0.02},
+          "priors": {x["id"]: x["prior"] for x in j.get("priors", []) if "id" in x and abs(_clip(x["prior"]) - cur_h.get(x["id"], -1)) > 0.02},
           "drop_claims": [cite_id(c) for c in j.get("drop_claims", [])], "extra": j.get("extra", [])}
     out = fork(bel, ch)
     known = {a["id"] for a in bel["assumptions"]} | {h["id"] for h in bel["hypotheses"]} | set(claims)

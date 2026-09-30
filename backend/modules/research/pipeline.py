@@ -18,8 +18,9 @@ MAX_SOURCES = 32
 PLAN_SCHEMA = {"type": "object", "required": ["subject", "keywords", "tasks"], "properties": {
     "subject": {"type": "string", "maxLength": 60},
     "keywords": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 40}},
-    "tasks": {"type": "array", "minItems": 4, "maxItems": 8, "items": {"type": "object", "required": ["question", "query"], "properties": {
-        "question": {"type": "string", "maxLength": 140}, "query": {"type": "string", "maxLength": 90}}}}}}
+    "tasks": {"type": "array", "minItems": 4, "maxItems": 8, "items": {"type": "object", "required": ["question", "query", "agent"], "properties": {
+        "question": {"type": "string", "maxLength": 140}, "query": {"type": "string", "maxLength": 90},
+        "agent": {"enum": ["market", "competitor", "customer", "regulation"]}}}}}}
 
 
 class Run:
@@ -74,11 +75,14 @@ class Run:
     async def plan(self):
         ctx = f"Research question: {self.query}" + (f"\nUser's goal: {self.goal}" if getattr(self, "goal", None) else "")
         sys = ("You plan business research. Break the research question into 5-8 focused, non-overlapping research tasks. "
-               "Each task has a question and a short web search query (keywords, no quotes). "
+               "Each task has a question, a short web search query (keywords, no quotes), and the specialist who owns it: market (size, growth, "
+               "trends), competitor (named companies, their offers and prices), customer (users' needs, behaviour, willingness to pay), "
+               "regulation (laws, permits, policy, operational risk). "
                "subject = the core topic in 2-4 words; keywords = distinctive terms (companies, products, places) a relevant page must mention.")
         try:
             j = await llm.chat_json(sys, ctx, 900, PLAN_SCHEMA)
-            tasks = [{"question": str(t["question"]), "q": str(t["query"])} for t in j["tasks"] if t.get("query")]
+            tasks = [{"question": str(t["question"]), "q": str(t["query"]), **({"agent": t["agent"], "agent_by": "planner"} if t.get("agent") else {})}
+                     for t in j["tasks"] if t.get("query")]
             subject, keywords, how = str(j["subject"]), [str(k) for k in j["keywords"] if k], f"planned by {llm.MODEL}"
         except Exception as e:   # model down: generic decomposition on the raw question
             subject, keywords, how = self.query[:60], [], f"model unavailable ({type(e).__name__}); generic task template"

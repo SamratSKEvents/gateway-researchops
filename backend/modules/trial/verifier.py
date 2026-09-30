@@ -51,12 +51,17 @@ async def verify(statements: list[dict], claims: dict[str, str], llm=chat_json) 
             out[s["id"]] = {"ruling": "unsupported", "reason": "shares no content words with its quotes", "by": "rule"}
         else:
             todo.append({**s, "cites": cites})
-    got, by = {}, "model"
+    got, by, nli_ids = {}, "model", set()
     if todo and llm is chat_json and nli.available():   # independent entailment model on GPU; the LLM loop below is the fallback
         scores = await nli.judge([(" ".join(claims[c] for c in it["cites"]), it["text"]) for it in todo])
+        undecided = []
         for it, sc in zip(todo, scores):
-            got[it["id"]] = (nli_ruling(sc), f"entailment {sc['entail']:.0%}, contradiction {sc['contradict']:.0%}")
-        todo, by = [], "nli"
+            if sc["entail"] >= 0.7 or sc["contradict"] >= 0.5:      # clear cases: the entailment model rules
+                got[it["id"]] = (nli_ruling(sc), f"entailment {sc['entail']:.0%}, contradiction {sc['contradict']:.0%}")
+                nli_ids.add(it["id"])
+            else:                                                     # paraphrase / synthesis: neutral for NLI -> LLM rules
+                undecided.append(it)
+        todo = undecided
     for size in (BATCH, 1):          # small models skip ids in a batch: re-ask whatever came back without a ruling, one at a time
         batches = [todo[i:i + size] for i in range(0, len(todo), size)]
         for r in await asyncio.gather(*(_batch(b, claims, llm) for b in batches), return_exceptions=True):
@@ -66,6 +71,6 @@ async def verify(statements: list[dict], claims: dict[str, str], llm=chat_json) 
     for s in statements:
         if s["id"] not in out:
             ruling, reason = got.get(s["id"], (None, ""))
-            out[s["id"]] = ({"ruling": ruling, "reason": reason, "by": by} if ruling else
+            out[s["id"]] = ({"ruling": ruling, "reason": reason, "by": "nli" if s["id"] in nli_ids else by} if ruling else
                             {"ruling": "unchecked", "reason": "verifier unavailable", "by": "none"})
     return out
