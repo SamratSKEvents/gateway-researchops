@@ -56,3 +56,39 @@ def whatif(run_id: str, values: dict) -> dict | None:
         return None
     A = [dict(a, p=min(max(float(values[a["id"]]), 0.01), 0.99)) if a["id"] in values else a for a in b["assumptions"]]
     return {"result": belief.compute(b["hypotheses"], A, b["evidence"]), "cruxes": belief.cruxes(b["hypotheses"], A, b["evidence"])}
+
+
+# ---------- on-demand analyses on any run (live or saved) ----------
+def _persist(run_id, key, sub, value):
+    """Store an analysis result into the run (live object or JSON on disk)."""
+    run = live.get(run_id)
+    if run:
+        tgt = run.result.setdefault(key, {}) if sub else run.result
+        tgt[sub or key] = value
+        run.save()
+        return
+    f = RUNS / f"{run_id}.json"
+    j = json.loads(f.read_text(encoding="utf8"))
+    tgt = j["result"].setdefault(key, {}) if sub else j["result"]
+    tgt[sub or key] = value
+    f.write_text(json.dumps(j, default=list), encoding="utf8")
+
+
+async def court_for(run_id: str, claim_id: str) -> dict | None:
+    from .. import court
+    snap = run_snapshot(run_id)
+    if not snap or claim_id not in snap.get("claims", {}):
+        return None
+    rec = await court.hold(claim_id, snap)
+    _persist(run_id, "court", claim_id, rec)
+    return rec
+
+
+async def autopsy_for(run_id: str) -> dict | None:
+    from .. import autopsy
+    snap = run_snapshot(run_id)
+    if not snap or not snap.get("result", {}).get("report"):
+        return None
+    rec = await autopsy.run(snap)
+    _persist(run_id, "autopsy", None, rec)
+    return rec

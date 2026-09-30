@@ -9,12 +9,13 @@ import asyncio
 from collections import Counter
 from .pipeline import Run
 from . import _llm as llm
-from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH
+from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy
 
 MAX_ROUNDS = 2            # deep follow-up rounds after the broad one
 FOLLOWUP_BUDGET = 10      # pages read per follow-up round
 USER_QUESTION_TIMEOUT = 180
 TRIAL_EXHIBITS = 36
+COURT_CLAIMS = 3          # background hearings after the report
 CHALLENGE_TOP = 8         # claims the verdict leans on most get challenged and re-researched
 
 
@@ -76,6 +77,41 @@ class Director(Run):
             self.status = "failed"
             self.emit("complete", "Research stopped", "failed", str(e))
         self.save()
+        if self.status == "done":      # results are already shown; court and autopsy keep working in the background
+            self._bg = asyncio.create_task(self.post_research())
+
+    # ---------- background: evidence court + research autopsy ----------
+    def court_targets(self, n=COURT_CLAIMS):
+        order = {"CONTRADICTED": 0, "OUTDATED": 1, "PARTIALLY_SUPPORTED": 2, "INSUFFICIENT_EVIDENCE": 3, "SUPPORTED": 4}
+        picks = [r["claim"] for r in sorted(self.result.get("challenges", []), key=lambda r: order.get(r["status"], 5))]
+        picks += [c["claim"] for c in self.result.get("belief", {}).get("cruxes", []) if c.get("kind") == "evidence"]
+        out = []
+        for c in picks:
+            if c in self.claims and c not in out:
+                out.append(c)
+        return out[:n]
+
+    async def post_research(self):
+        bg = self.result.setdefault("background", {})
+        bg.update(court="running", autopsy="queued")
+        for cid in self.court_targets():
+            await self.stage("court", f"Evidence court: {self.claims[cid]['text'][:60]}", lambda cid=cid: self.hold_court(cid))
+            self.save()
+        bg["court"] = "done"
+        bg["autopsy"] = "running"
+        await self.stage("autopsy", "Research autopsy: red-team audit of the finished research", self.run_autopsy)
+        bg["autopsy"] = "done"
+        self.save()
+
+    async def hold_court(self, cid):
+        rec = await court.hold(cid, self.snapshot())
+        self.result.setdefault("court", {})[cid] = rec
+        return f"{rec['ruling']}: {rec['rationale'][:120]}", rec
+
+    async def run_autopsy(self):
+        rec = await autopsy.run(self.snapshot())
+        self.result["autopsy"] = rec
+        return f"{rec['survival']} — {len(rec['findings'])} findings ({rec['survival_reasoning'][:80]})", rec
 
     async def research_round(self, r, queries, community, budget):
         tag = "broad" if r == 0 else "deep"
@@ -117,6 +153,17 @@ class Director(Run):
 
     def _publish_hypotheses(self):
         self.result["hypotheses"] = {k: self.hyp[k] for k in ("decision", "hypotheses", "assumptions", "how")}
+
+    async def plan(self):
+        summary, data = await super().plan()
+        await self._assign_agents(self.queries)
+        return summary + "; assigned to " + ", ".join(sorted({t["agent"] for t in self.queries})), data
+
+    async def _assign_agents(self, tasks):
+        """Zero-shot classifier routes each research task to a specialist (market / competitor / customer / regulation)."""
+        todo = [t for t in tasks if "agent" not in t]
+        for t, (agent, p) in zip(todo, await classify.best([t["question"] for t in todo], classify.AGENT_DOMAIN)):
+            t["agent"], t["agent_confidence"] = agent, round(p, 3)
 
     # ---------- ledger & belief ----------
     async def update_ledger(self):
@@ -216,6 +263,7 @@ class Director(Run):
                 self._followups.append({"id": f"f{len(self.queries) + len(self._followups) + 1}", "question": byid[g["hypothesis"]]["text"],
                                         "q": qtext, "hypothesis": g["hypothesis"], "round": r})
             self.voi_log.append({**g, "round": r})
+        await self._assign_agents(self._followups)
         self.queries += self._followups
         self.result["plan"]["tasks"] = self.queries
         self.result["voi"] = self.voi_log

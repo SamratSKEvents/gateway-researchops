@@ -75,7 +75,7 @@ async def _verify(t, ch, search, fetch, judge):
             cands.append((r, s))
     if not cands:
         return {"status": "INSUFFICIENT_EVIDENCE", "confidence": 0.5, "evidence": [], "notes": "follow-up search found no independent pages"}
-    if not nli.available() and judge is nli.judge:
+    if judge is nli.judge and not nli.available():
         return {"status": "INSUFFICIENT_EVIDENCE", "confidence": 0.5, "evidence": [], "notes": "verifier model unavailable (GPU entailment model not loaded)"}
     scores = await judge([(s, t["text"]) for _, s in cands])
     scored = sorted(zip(cands, scores), key=lambda x: -max(x[1]["entail"], x[1]["contradict"]))
