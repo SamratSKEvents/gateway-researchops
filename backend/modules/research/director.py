@@ -9,12 +9,13 @@ import asyncio
 from collections import Counter
 from .pipeline import Run
 from . import _llm as llm
-from .. import goals, ledger as L, belief as B, voi, trial, report
+from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH
 
 MAX_ROUNDS = 2            # deep follow-up rounds after the broad one
 FOLLOWUP_BUDGET = 10      # pages read per follow-up round
 USER_QUESTION_TIMEOUT = 180
 TRIAL_EXHIBITS = 36
+CHALLENGE_TOP = 8         # claims the verdict leans on most get challenged and re-researched
 
 
 class Director(Run):
@@ -64,6 +65,7 @@ class Director(Run):
                 if not self._followups:
                     break
                 await self.research_round(r, self._followups, community=False, budget=FOLLOWUP_BUDGET)
+            await self.stage("challenge", "Challenge & verify the claims the verdict leans on", self.challenge_claims)
             await self.stage("index", "Store documents & claims in the global datastore", self.index)
             await self.stage("trial", "Trial: advocate, challenger, witnesses, pre-mortem", self.trial)
             await self.stage("report", "Verify citations & write the decision report", self.write_report)
@@ -145,7 +147,8 @@ class Director(Run):
         out = []
         for lab in self.labels:
             c = self.claims[lab["claim"]]
-            out.append({**lab, "cluster": c["cluster"], "reliability": self.sources[c["source"]]["authority"],
+            w = CH.STATUS_WEIGHT.get(c.get("status"), 1.0)   # verification outcome re-weights the claim
+            out.append({**lab, "cluster": c["cluster"], "reliability": min(1.0, self.sources[c["source"]]["authority"] * w),
                         "freshness": c["freshness"], "domains": c["cluster_domains"]})
         return out
 
@@ -218,6 +221,46 @@ class Director(Run):
         self.result["voi"] = self.voi_log
         return (f"researching {', '.join(g['hypothesis'] for g in gaps)} deeper with {len(self._followups)} follow-up queries"
                 + (f"; asked the user about {q['assumption']}" if q else ""), {"gaps": gaps, "followups": self._followups, "question": q})
+
+    # ---------- claim lifecycle: challenge & verify ----------
+    async def challenge_claims(self):
+        E = sorted(self.evidence(), key=lambda e: -(e["strength"] * e["reliability"] * e["freshness"]))
+        picked, seen = [], set()
+        for e in E:
+            if e["cluster"] not in seen and e["claim"] not in picked:
+                seen.add(e["cluster"]); picked.append(e["claim"])
+            if len(picked) >= CHALLENGE_TOP:
+                break
+        targets = [{"id": cid, "text": self.claims[cid]["text"], "domain": self.sources[self.claims[cid]["source"]]["domain"],
+                    "year": self.claims[cid].get("year"), "freshness": self.claims[cid].get("freshness", 1.0)} for cid in picked]
+        ss = self.search_session
+
+        async def search(q):
+            return (await ss.web(q))["results"]
+
+        async def fetch(url):
+            r = await ss.fetch(url)
+            return r["text"][:40000] if r.get("ok") else None
+
+        records = await CH.run(targets, search, fetch)
+        for r in records:
+            c = self.claims[r["claim"]]
+            c.update(status=r["status"], claim_type=r["claim_type"], verification=r["notes"])
+            for ev in r["evidence"]:        # follow-up evidence joins the ledger, citable like any other claim
+                sid = self.add_source(ev["url"], ev["title"] or ev["domain"], origin="verification")
+                self.sources[sid]["status"] = "fetched"
+                ev["claim_id"] = self.add_claim(ev["quote"], sid, {"kind": "fact", "epistemic": "reported", "sentiment": 0, "prices": []},
+                                                c.get("tasks", []), {"verifies": r["claim"], "freshness": 1.0, "year": None,
+                                                                    "cluster": f"v{r['claim']}", "cluster_domains": 1})
+                ev["source_id"] = sid
+            self.emit("challenge", f"{r['status']}: {c['text'][:70]}", "progress", f"{r['severity']} — {r['argument'][:140]}", r)
+        self.result["challenges"] = records
+        self._recompute()
+        from collections import Counter as _C
+        tally = _C(r["status"] for r in records)
+        b = self.result["belief"]["result"]
+        return (f"{len(records)} claims challenged — " + ", ".join(f"{v} {k.lower()}" for k, v in tally.most_common())
+                + f"; verdict now {b['verdict']:.0%}", {"challenges": records, "verdict": b["verdict"]})
 
     # ---------- trial & report ----------
     def _exhibits(self):
