@@ -9,7 +9,7 @@ import asyncio
 from collections import Counter
 from .pipeline import Run
 from . import _llm as llm
-from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy
+from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy, memory
 
 MAX_ROUNDS = 2            # deep follow-up rounds after the broad one
 FOLLOWUP_BUDGET = 10      # pages read per follow-up round
@@ -99,7 +99,10 @@ class Director(Run):
 
     async def post_research(self):
         bg = self.result.setdefault("background", {})
-        bg.update(court="running", autopsy="queued")
+        bg.update(entities="running", court="queued", autopsy="queued")
+        await self.stage("entities", "Extract named entities for research memory", self.extract_entities)
+        bg["entities"], bg["court"] = "done", "running"
+        self.save()
         for cid in self.court_targets():
             await self.stage("court", f"Evidence court: {self.claims[cid]['text'][:60]}", lambda cid=cid: self.hold_court(cid))
             self.save()
@@ -108,6 +111,10 @@ class Director(Run):
         await self.stage("autopsy", "Research autopsy: red-team audit of the finished research", self.run_autopsy)
         bg["autopsy"] = "done"
         self.save()
+
+    async def extract_entities(self):
+        self.result["entities"] = await memory.entities_for(self.snapshot())
+        return f"{len(self.result['entities'])} entities: " + ", ".join(e["name"] for e in self.result["entities"][:8]), self.result["entities"]
 
     async def hold_court(self, cid):
         rec = await court.hold(cid, self.snapshot())

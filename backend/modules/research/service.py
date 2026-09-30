@@ -115,3 +115,17 @@ async def whatif_ask(run_id: str, question: str) -> dict | None:
     else:
         _persist(run_id, "whatif_questions", None, hist)
     return rec
+
+
+async def memory_state(question: str = "", backfill: int = 3) -> dict:
+    """Cross-run memory. Runs saved before entity extraction existed get their entities extracted (a few per call) and cached."""
+    from .. import memory
+    ids = [r["id"] for r in list_runs(200)] + [rid for rid in live if rid not in {r["id"] for r in list_runs(200)}]
+    snaps = [s for s in (run_snapshot(i) for i in ids) if s]
+    for s in [s for s in snaps if s.get("status") == "done" and "entities" not in s.get("result", {})][:backfill]:
+        try:
+            s["result"]["entities"] = await memory.entities_for(s)
+            _persist(s["id"], "entities", None, s["result"]["entities"])
+        except Exception:
+            pass
+    return await memory.state(snaps, question)

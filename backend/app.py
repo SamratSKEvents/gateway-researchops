@@ -6,10 +6,11 @@ from fastapi.staticfiles import StaticFiles
 from .modules.research.api import router as research_api
 from .modules.ai_runtime.api import router as ai_api
 from .modules.store.api import router as store_api
+from .modules.memory.api import router as memory_api
 
 FRONT = Path(__file__).resolve().parent.parent / "frontend"
 app = FastAPI(title="ResearchOps")
-for r in (research_api, ai_api, store_api):
+for r in (research_api, ai_api, store_api, memory_api):
     app.include_router(r)
 app.mount("/research", StaticFiles(directory=FRONT / "research"), name="research")
 
