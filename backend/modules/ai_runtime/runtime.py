@@ -5,6 +5,9 @@ import httpx
 BASE = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
 MODEL = os.getenv("LLM_MODEL", "qwen3:4b")
 KEY = os.getenv("LLM_API_KEY", "")
+# Optional key pool (e.g. several Groq keys): LLM_API_KEYS=k1,k2,k3. Each agent (task prefix) prefers its own key and fails
+# over to the others on 429 / 401 / 5xx, so one agent's rate limit does not stall the rest.
+KEYS = [k.strip() for k in os.getenv("LLM_API_KEYS", "").split(",") if k.strip()] or ([KEY] if KEY else [])
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 _LOCAL = "11434" in BASE or "localhost" in BASE or "127.0.0.1" in BASE
 _calls: deque = deque(maxlen=200)
@@ -12,7 +15,16 @@ _sem = asyncio.Semaphore(int(os.getenv("LLM_CONCURRENCY", "2")))
 
 
 def info():
-    return {"base_url": BASE, "model": MODEL, "embed_model": EMBED_MODEL, "local": _LOCAL}
+    return {"base_url": BASE, "model": MODEL, "embed_model": EMBED_MODEL, "local": _LOCAL, "keys": len(KEYS)}
+
+
+def keys_for(task: str) -> list[str]:
+    """Preferred key for this agent first (stable by task prefix), then the rest of the pool as backups."""
+    if not KEYS:
+        return [""]
+    agent = task.split(".")[0]
+    i = sum(map(ord, agent)) % len(KEYS)
+    return KEYS[i:] + KEYS[:i]
 
 
 def recent_calls(n=50):
@@ -36,10 +48,14 @@ async def chat(task, system, user, max_tokens=800, schema=None):
     t0 = time.time()
     try:
         async with _sem, httpx.AsyncClient(timeout=120) as c:
-            for attempt in range(4):
-                r = await c.post(f"{BASE}/chat/completions", json=body, headers={"Authorization": f"Bearer {KEY}"} if KEY else {})
-                if r.status_code != 429:
+            pool = keys_for(task)
+            for attempt in range(max(4, len(pool))):
+                key = pool[attempt % len(pool)]
+                r = await c.post(f"{BASE}/chat/completions", json=body, headers={"Authorization": f"Bearer {key}"} if key else {})
+                if r.status_code not in (401, 429, 500, 502, 503):
                     break
+                if attempt + 1 < len(pool):
+                    continue                      # fail over to the next key immediately
                 await asyncio.sleep(min(float(r.headers.get("retry-after", 5)), 30) + attempt * 2)
             r.raise_for_status()
             out = re.sub(r"<think>.*?</think>", "", r.json()["choices"][0]["message"]["content"] or "", flags=re.S).strip()

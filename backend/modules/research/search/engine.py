@@ -7,8 +7,8 @@ from . import cache, health, providers as P
 from ...store import bucket
 from .providers import ProviderError
 
-WEB_ORDER = ["searxng:yandex"]          # the only verified query-specific web search (google/bing/duckduckgo removed)
-QUERY_SPECIFIC = {"searxng:yandex"}
+WEB_ORDER = ["searxng:yandex"] + (["serpapi"] if P.SERPAPI_KEY else []) + ["duckduckgo"]   # fall through in this order
+QUERY_SPECIFIC = {"searxng:yandex", "serpapi", "duckduckgo"}
 MIN_GOOD = 5
 FALLBACK_TIMEOUT = 8   # seconds each for the browser and the Web Archive attempts on a blocked page
 BROWSER_UA = P.BROWSER_UA
@@ -17,7 +17,7 @@ BROWSER_UA = P.BROWSER_UA
 def _call(provider, arg):
     if provider.startswith("searxng:"):
         return P.searxng(provider.split(":", 1)[1], arg)
-    return {"reddit_pullpush": P.reddit_pullpush}[provider](arg)
+    return {"reddit_pullpush": P.reddit_pullpush, "duckduckgo": P.duckduckgo, "serpapi": P.serpapi}[provider](arg)
 
 
 class SearchSession:

@@ -19,7 +19,8 @@ class ProviderError(Exception):
 
 _last_call: dict[str, float] = {}
 _locks: dict[str, asyncio.Lock] = {}
-MIN_INTERVAL = {"searxng:yandex": 1.5, "reddit_pullpush": 1.0, "wikipedia_links": 0.3}
+MIN_INTERVAL = {"searxng:yandex": 1.5, "reddit_pullpush": 1.0, "wikipedia_links": 0.3, "duckduckgo": 2.0, "serpapi": 0.5}
+SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 
 
 async def _paced(name):
@@ -62,6 +63,55 @@ async def searxng(engine: str, query: str):
         raise ProviderError(f"{engine}: {down[engine]}", 600)
     res = [{"url": x["url"], "title": x.get("title", ""), "snippet": x.get("content", "")} for x in j.get("results", [])]
     return res, ""
+
+
+async def duckduckgo(query: str):
+    """DuckDuckGo HTML endpoint (no key). Fallback web search; genericity/health checks apply like any provider."""
+    from lxml import html as LH
+    lock = await _paced("duckduckgo")
+    try:
+        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": BROWSER_UA}, follow_redirects=True) as c:
+            r = await c.post("https://html.duckduckgo.com/html/", data={"q": query, "kl": "in-en"})
+    except httpx.HTTPError as e:
+        raise ProviderError(f"DuckDuckGo unreachable: {type(e).__name__}", 300)
+    finally:
+        _done("duckduckgo", lock)
+    if r.status_code != 200:
+        raise ProviderError(f"DuckDuckGo HTTP {r.status_code}", 600)
+    doc = LH.fromstring(r.text)
+    res = []
+    for div in doc.xpath('//div[contains(@class,"result__body")]'):
+        a = div.xpath('.//a[contains(@class,"result__a")]')
+        if not a:
+            continue
+        href = a[0].get("href", "")
+        if "uddg=" in href:                      # DDG redirect wrapper -> real URL
+            href = unquote(parse_qs(urlparse(href).query).get("uddg", [""])[0])
+        if not href.startswith("http") or "duckduckgo.com" in href:
+            continue
+        snip = div.xpath('.//*[contains(@class,"result__snippet")]')
+        res.append({"url": href, "title": a[0].text_content().strip(), "snippet": snip[0].text_content().strip() if snip else ""})
+    if not res and "anomaly" in r.text.lower():
+        raise ProviderError("DuckDuckGo bot challenge", 1800)
+    return res, ""
+
+
+async def serpapi(query: str):
+    """Google results via SerpApi. Only used when SERPAPI_KEY is set."""
+    if not SERPAPI_KEY:
+        raise ProviderError("SERPAPI_KEY not set", 86400)
+    lock = await _paced("serpapi")
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.get("https://serpapi.com/search.json", params={"q": query, "api_key": SERPAPI_KEY, "engine": "google", "num": 10})
+    except httpx.HTTPError as e:
+        raise ProviderError(f"SerpApi unreachable: {type(e).__name__}", 300)
+    finally:
+        _done("serpapi", lock)
+    if r.status_code != 200:
+        raise ProviderError(f"SerpApi HTTP {r.status_code}", 3600 if r.status_code in (401, 429) else 300)
+    return [{"url": x["link"], "title": x.get("title", ""), "snippet": x.get("snippet", "")}
+            for x in r.json().get("organic_results", []) if x.get("link")], ""
 
 
 # ---------- community evidence (full text returned directly) ----------
