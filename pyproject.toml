@@ -1,0 +1,30 @@
+[project]
+name = "researchops"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "trafilatura",
+    "scrapling[fetchers]>=0.4.15",
+    "torch",            # CUDA 12.8 build (RTX 50xx / sm_120), see [tool.uv.sources]
+    "transformers",
+    "sentencepiece",
+    "protobuf",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend"]
+python_files = ["test_*.py"]
