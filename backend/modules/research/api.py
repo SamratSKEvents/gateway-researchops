@@ -103,3 +103,76 @@ async def events(rid: str):
             run.subscribers.discard(q)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ---------- derived views & analyses (agents, planner, graph, replay, challenges, court, autopsy) ----------
+from ..views import agents as V_agents, planner as V_planner, graph as V_graph   # noqa: E402
+
+
+def _snap(rid):
+    snap = service.run_snapshot(rid)
+    if not snap:
+        raise HTTPException(404, "no such run")
+    return snap
+
+
+@router.get("/runs/{rid}/agents")
+def run_agents(rid: str):
+    return V_agents.derive(_snap(rid))["agents"]
+
+
+@router.get("/runs/{rid}/messages")
+def run_messages(rid: str):
+    return V_agents.derive(_snap(rid))["messages"]
+
+
+@router.get("/runs/{rid}/planner")
+def run_planner(rid: str):
+    return V_planner.derive(_snap(rid))
+
+
+@router.get("/runs/{rid}/graph")
+def run_graph(rid: str, per_hypothesis: int = 8):
+    return V_graph.graph(_snap(rid), per_hypothesis)
+
+
+@router.get("/runs/{rid}/replay")
+def run_replay(rid: str):
+    return V_graph.replay(_snap(rid))
+
+
+@router.get("/runs/{rid}/challenges")
+def run_challenges(rid: str):
+    return _snap(rid)["result"].get("challenges", [])
+
+
+class CourtReq(BaseModel):
+    claim: str
+
+
+@router.get("/runs/{rid}/court")
+def run_court(rid: str):
+    s = _snap(rid)
+    return {"status": (s["result"].get("background") or {}).get("court"), "hearings": s["result"].get("court", {})}
+
+
+@router.post("/runs/{rid}/court")
+async def hold_court(rid: str, req: CourtReq):
+    rec = await service.court_for(rid, req.claim)
+    if rec is None:
+        raise HTTPException(404, "no such run or claim")
+    return rec
+
+
+@router.get("/runs/{rid}/autopsy")
+def run_autopsy(rid: str):
+    s = _snap(rid)
+    return {"status": (s["result"].get("background") or {}).get("autopsy"), "autopsy": s["result"].get("autopsy")}
+
+
+@router.post("/runs/{rid}/autopsy")
+async def redo_autopsy(rid: str):
+    rec = await service.autopsy_for(rid)
+    if rec is None:
+        raise HTTPException(409, "run has no report yet")
+    return rec
