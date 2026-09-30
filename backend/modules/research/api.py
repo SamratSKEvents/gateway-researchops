@@ -176,3 +176,32 @@ async def redo_autopsy(rid: str):
     if rec is None:
         raise HTTPException(409, "run has no report yet")
     return rec
+
+
+class ForkReq(BaseModel):
+    assumptions: dict[str, float] = {}
+    priors: dict[str, float] = {}
+    drop_claims: list[str] = []
+    extra: list[dict] = []
+
+
+class AskReq(BaseModel):
+    question: str
+
+
+@router.post("/runs/{rid}/whatif/fork")
+def whatif_fork(rid: str, req: ForkReq):
+    out = service.whatif_fork(rid, req.model_dump())
+    if out is None:
+        raise HTTPException(404, "no belief state for this run")
+    return out
+
+
+@router.post("/runs/{rid}/whatif/ask")
+async def whatif_ask(rid: str, req: AskReq):
+    if not req.question.strip():
+        raise HTTPException(400, "empty question")
+    out = await service.whatif_ask(rid, req.question)
+    if out is None:
+        raise HTTPException(404, "no belief state for this run")
+    return out

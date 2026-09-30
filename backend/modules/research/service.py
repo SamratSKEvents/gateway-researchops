@@ -92,3 +92,26 @@ async def autopsy_for(run_id: str) -> dict | None:
     rec = await autopsy.run(snap)
     _persist(run_id, "autopsy", None, rec)
     return rec
+
+
+def whatif_fork(run_id: str, changes: dict) -> dict | None:
+    from .. import whatif as W
+    b = ((run_snapshot(run_id) or {}).get("result") or {}).get("belief")
+    return W.fork(b, changes) if b else None
+
+
+async def whatif_ask(run_id: str, question: str) -> dict | None:
+    from .. import whatif as W
+    snap = run_snapshot(run_id)
+    b = ((snap or {}).get("result") or {}).get("belief")
+    if not b:
+        return None
+    rec = await W.ask(b, question, snap["claims"])
+    run = live.get(run_id)
+    hist = (run.result if run else snap["result"]).setdefault("whatif_questions", [])
+    hist.append({k: rec[k] for k in ("question", "mapping_reason", "applied", "diff", "verdict_delta", "flips")} | {"verdict": rec["result"]["verdict"]})
+    if run:
+        run.save()
+    else:
+        _persist(run_id, "whatif_questions", None, hist)
+    return rec
