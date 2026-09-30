@@ -48,6 +48,21 @@ async def _challenge(targets, llm):
     return out
 
 
+CONFIRM_SCHEMA = {"type": "object", "required": ["contradicts", "reason"], "properties": {
+    "contradicts": {"type": "boolean"}, "reason": {"type": "string", "maxLength": 160}}}
+CONFIRM_SYSTEM = ("Does the EVIDENCE sentence directly contradict the CLAIM, i.e. both cannot be true about the same thing? "
+                  "Different topics, different companies, or merely different emphasis are NOT contradictions.")
+
+
+async def _confirm_contradiction(claim, sentence, llm):
+    """The entailment model over-calls contradiction between related sentences; the LLM must agree before it counts."""
+    try:
+        j = await llm("challenge.confirm", CONFIRM_SYSTEM, f"CLAIM: {claim}\nEVIDENCE: {sentence}", CONFIRM_SCHEMA, 150)
+        return bool((j or {}).get("contradicts")), (j or {}).get("reason", "")
+    except Exception:
+        return False, "confirmation unavailable"
+
+
 def sentences(text: str) -> list[str]:
     """Plain sentence split (text parsing only; no judgement about content)."""
     parts = re.split(r"(?<=[.!?])\s+|\n+", text or "")
@@ -55,7 +70,7 @@ def sentences(text: str) -> list[str]:
 
 
 def rule(best_ent: float, best_con: float, freshness: float) -> str:
-    if best_con >= CONTRA:
+    if best_con >= CONTRA and best_con > best_ent:          # support wins ties: one confirming source beats noise
         return "OUTDATED" if freshness < 0.5 else "CONTRADICTED"
     if best_ent >= SUPPORT:
         return "SUPPORTED"
@@ -64,7 +79,7 @@ def rule(best_ent: float, best_con: float, freshness: float) -> str:
     return "INSUFFICIENT_EVIDENCE"
 
 
-async def _verify(t, ch, search, fetch, judge):
+async def _verify(t, ch, search, fetch, judge, embed=None, llm=chat_json):
     res = await search(ch["query"])
     pages = [r for r in (res or []) if r.get("url") and t.get("domain", "") not in r["url"]][:PAGES]
     texts = await asyncio.gather(*(fetch(r["url"]) for r in pages))
@@ -73,12 +88,21 @@ async def _verify(t, ch, search, fetch, judge):
         body = txt or r.get("snippet") or ""
         for s in sentences(body)[:SENTS_PER_PAGE]:
             cands.append((r, s))
+    if cands:     # only sentences about the same subject may support or contradict (NLI calls unrelated text a contradiction)
+        sims = await classify.relatedness(t["text"], [s for _, s in cands], embed)
+        if sims is not None:
+            cands = [c for c, sim in sorted(zip(cands, sims), key=lambda x: -x[1]) if sim >= classify.RELATED_MIN][:40]
     if not cands:
-        return {"status": "INSUFFICIENT_EVIDENCE", "confidence": 0.5, "evidence": [], "notes": "follow-up search found no independent pages"}
+        return {"status": "INSUFFICIENT_EVIDENCE", "confidence": 0.5, "evidence": [], "notes": "no follow-up sentence was about the same subject"}
     if judge is nli.judge and not nli.available():
         return {"status": "INSUFFICIENT_EVIDENCE", "confidence": 0.5, "evidence": [], "notes": "verifier model unavailable (GPU entailment model not loaded)"}
     scores = await judge([(s, t["text"]) for _, s in cands])
     scored = sorted(zip(cands, scores), key=lambda x: -max(x[1]["entail"], x[1]["contradict"]))
+    for i, ((r, sent), sc) in enumerate(scored[:6]):     # proposed contradictions need a second opinion
+        if sc["contradict"] >= CONTRA and sc["contradict"] > sc["entail"]:
+            ok, why = await _confirm_contradiction(t["text"], sent, llm)
+            if not ok:
+                scored[i] = ((r, sent), {**sc, "contradict": 0.0, "rejected_contradiction": why})
     best_ent = max(sc["entail"] for _, sc in scored)
     best_con = max(sc["contradict"] for _, sc in scored)
     status = rule(best_ent, best_con, t.get("freshness", 1.0))
@@ -94,12 +118,12 @@ async def _verify(t, ch, search, fetch, judge):
     return {"status": status, "confidence": conf, "evidence": ev, "notes": notes}
 
 
-async def run(targets: list[dict], search, fetch, judge=nli.judge, llm=chat_json) -> list[dict]:
+async def run(targets: list[dict], search, fetch, judge=nli.judge, llm=chat_json, embed=None) -> list[dict]:
     if not targets:
         return []
     types = await classify.best([t["text"] for t in targets], classify.CLAIM_TYPE)
     attacks = await _challenge(targets, llm)
-    verdicts = await asyncio.gather(*(_verify(t, attacks[t["id"]], search, fetch, judge) for t in targets), return_exceptions=True)
+    verdicts = await asyncio.gather(*(_verify(t, attacks[t["id"]], search, fetch, judge, embed, llm) for t in targets), return_exceptions=True)
     out = []
     for t, (ctype, cp), ch, v in zip(targets, types, (attacks[t["id"]] for t in targets), verdicts):
         if isinstance(v, Exception):

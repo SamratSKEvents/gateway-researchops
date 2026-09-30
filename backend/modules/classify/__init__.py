@@ -64,3 +64,26 @@ AGENT_DOMAIN = {   # which specialist a research task belongs to
     "customer": "This question is about customers, users, their needs, behaviour or willingness to pay.",
     "regulation": "This question is about laws, regulation, policy, compliance or operational risk.",
 }
+
+
+# ---- topical relevance (embedding model) ----
+RELATED_MIN = 0.62   # cosine; calibration knob: on-topic sentences scored >=0.67, off-topic <=0.54 on the check set
+# The entailment model scores UNRELATED sentences as contradictions ("Apple Music" vs a scooter claim), so every
+# contradiction/support judgement must first pass this gate.
+
+
+def _cos(a, b):
+    na = sum(x * x for x in a) ** 0.5 or 1.0
+    nb = sum(x * x for x in b) ** 0.5 or 1.0
+    return sum(x * y for x, y in zip(a, b)) / (na * nb)
+
+
+async def relatedness(anchor: str, texts: list[str], embed=None) -> list[float] | None:
+    """Cosine similarity of each text to the anchor; None if no embedding model (callers then skip the gate)."""
+    from ..ai_runtime import embed as _embed
+    if not texts:
+        return []
+    v = await (embed or _embed)([f"search_query: {anchor}"] + [f"search_document: {t}" for t in texts])
+    if not v:
+        return None
+    return [round(_cos(v[0], x), 4) for x in v[1:]]

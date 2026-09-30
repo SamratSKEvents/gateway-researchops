@@ -131,7 +131,11 @@ async def state(runs: list[dict], question: str = "", embed=_embed, judge=nli.ju
                     for cb in tops[b["id"]]:
                         pairs.append((ca["text"], cb["text"])); meta.append((a, ca, b, cb))
         pairs, meta = pairs[:1500], meta[:1500]
-        for (a, ca, b, cb), sc in zip(meta, await judge(pairs) if pairs else []):
+        vecs = await embed([t for p in pairs for t in p]) if (embed and pairs) else None
+        from ..classify import _cos, RELATED_MIN
+        for k, ((a, ca, b, cb), sc) in enumerate(zip(meta, await judge(pairs) if pairs else [])):
+            if vecs and _cos(vecs[2 * k], vecs[2 * k + 1]) < RELATED_MIN:
+                continue       # unrelated claims: the entailment model's "contradiction" means nothing here
             if sc["contradict"] >= 0.85:
                 contradictions.append({"a": {"run": a["id"], "claim": ca["id"], "text": ca["text"]},
                                        "b": {"run": b["id"], "claim": cb["id"], "text": cb["text"]}, "score": round(sc["contradict"], 3)})

@@ -4,7 +4,7 @@ cited turn is then checked by the citation verifier, and the ruling is recorded 
 
     await hold(claim_id, snap, judge=nli.judge, llm=chat_json) -> hearing record
 """
-from .. import nli, trial
+from .. import nli, trial, classify
 from ..ai_runtime import chat_json
 from ..ledger import cite_id
 
@@ -21,9 +21,13 @@ SYSTEM = ("You run an evidence court over ONE business claim. Order: JUDGE opens
           "contradict it or fail to support it.")
 
 
-async def _exhibits(claim, others, challenge, judge):
-    """Other ledger claims that the entailment model says support (entail) or contradict the claim."""
-    cands = [c for c in others if c["id"] != claim["id"] and c.get("cluster") != claim.get("cluster")][:MAX_CANDIDATES]
+async def _exhibits(claim, others, challenge, judge, embed=None):
+    """Other ledger claims ON THE SAME SUBJECT (embedding gate) that the entailment model says support or contradict the claim."""
+    cands = [c for c in others if c["id"] != claim["id"] and c.get("cluster") != claim.get("cluster")]
+    sims = await classify.relatedness(claim["text"], [c["text"] for c in cands], embed) if cands else []
+    if sims is not None:
+        cands = [c for c, s in sorted(zip(cands, sims), key=lambda x: -x[1]) if s >= classify.RELATED_MIN]
+    cands = cands[:MAX_CANDIDATES]
     sup, con = [], []
     if cands and (judge is not nli.judge or nli.available()):
         scores = await judge([(c["text"], claim["text"]) for c in cands])
@@ -35,14 +39,14 @@ async def _exhibits(claim, others, challenge, judge):
     return [dict(claim, relation="claim under trial", score=1.0)] + sup + con + ver
 
 
-async def hold(claim_id: str, snap: dict, judge=nli.judge, llm=chat_json) -> dict:
+async def hold(claim_id: str, snap: dict, judge=nli.judge, llm=chat_json, embed=None) -> dict:
     claims, sources = snap["claims"], snap["sources"]
     if claim_id not in claims:
         raise KeyError(claim_id)
     claim = claims[claim_id]
     ch = next((r for r in snap.get("result", {}).get("challenges", []) if r["claim"] == claim_id), None)
     pool = [c for c in claims.values() if set(c.get("tasks", [])) & set(claim.get("tasks", []))] or list(claims.values())
-    ex = await _exhibits(claim, pool, ch, judge)
+    ex = await _exhibits(claim, pool, ch, judge, embed)
     ids = {e["id"] for e in ex}
     listing = "\n".join(f"[{e['id']}] ({e['relation']}; {sources.get(claims.get(e['id'], {}).get('source'), {}).get('domain', e.get('domain', ''))}) "
                         f"\"{e['text']}\"" for e in ex)
