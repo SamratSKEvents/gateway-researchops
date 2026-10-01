@@ -2,6 +2,7 @@
 ### The autonomous research agent that puts its own findings on trial.
 
 **▶ Live demo (recorded runs, no setup):** https://samratskevents.github.io/gateway-researchops/
+**Source:** https://github.com/SamratSKEvents/gateway-researchops · **Demo branch:** [`gh-pages`](https://github.com/SamratSKEvents/gateway-researchops/tree/gh-pages) · **Screenshots:** [`docs/screenshots`](docs/screenshots) · **API docs:** `/docs` on a running instance
 
 > Ask a business question. ResearchOps interviews you about what you are actually trying to decide, breaks the question into research tasks, reads the web in parallel, argues both sides in an evidence court, red-teams its own conclusion, and hands you a **verdict with odds**, the **facts that could flip it**, and a **verbatim source quote behind every sentence**.
 
@@ -69,6 +70,20 @@ Across every investigation: related past research ranked by relevance, recurring
 
 ### Also
 Agents & conversation transcript, planner (task tree, uncertainties, plan versions, budget), replay timeline, evidence by hypothesis, sources with their role in the verdict, progress stepper, light / dark mode.
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Live research graph](docs/screenshots/02-graph.png) **Live research graph** — the whole investigation as a flow; drag nodes, double-click for details | ![Verdict](docs/screenshots/03-verdict.png) **Verdict** — odds, cruxes, Monte Carlo summary, research-debt register, minority report |
+| ![Comparison matrix](docs/screenshots/04-matrix.png) **Comparison matrix** — cited cells only; gaps are shown, never guessed | ![Monte Carlo simulation](docs/screenshots/05-monte-carlo.png) **Monte Carlo simulation** — parameters from cited evidence, live sliders |
+| ![Worst case](docs/screenshots/06-monte-carlo-worst-case.png) **Worst case → best case** — scenario table, tail risk, tornado chart | ![Evidence court](docs/screenshots/07-evidence-court.png) **Evidence court** — prosecution vs defence in cited points, ruling, voice playback |
+| ![Red-team autopsy](docs/screenshots/08-autopsy.png) **Red-team autopsy** — auditors try to break the conclusion; survival score | ![Agents](docs/screenshots/09-agents.png) **Agents & conversation** — every agent's status and the full message transcript |
+| ![Action plan](docs/screenshots/10-action-plan.png) **Action plan** — phased roadmap with measurable go/no-go gates | ![Light mode](docs/screenshots/11-graph-light.png) **Light mode** |
+| ![Report page 1](docs/screenshots/12-report-1.png) **Decision report (PDF)** — engineering-style technical report | ![Report page 2](docs/screenshots/12-report-2.png) **Report: summary, cruxes, hypotheses** |
+| ![Landing](docs/screenshots/01-landing.png) **Start** — a question plus optional geography, scope, timeframe and depth | |
 
 ---
 
