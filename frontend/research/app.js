@@ -32,7 +32,7 @@ window.addEventListener("hashchange", route);
 route();
 function route() {
   const m = location.hash.match(/run=(\w+)/);
-  if (!m) { $("#landing").hidden = false; $("#runView").hidden = true; $("#topSearch").hidden = true; return; }
+  if (!m) { document.body.classList.remove("is-running"); $("#landing").hidden = false; $("#runView").hidden = true; $("#topSearch").hidden = true; return; }
   const tab = (location.hash.match(/tab=(\w+)/) || [])[1];
   if (m[1] !== RUN) openRun(m[1]).then(() => tab && showTab(tab)); else if (tab) showTab(tab);
 }
@@ -49,6 +49,7 @@ async function openRun(id) {
   $("#runQuery").textContent = `Query: ${snap.query}`;
   $("#runTitle").textContent = "Researching…";
   $("#goalForm").hidden = snap.status !== "running";
+  document.body.classList.toggle("is-running", snap.status === "running");
   if (snap.status === "running") {
     if (snap.pending) setTimeout(() => showPending(snap.pending), 0);
     const es = new EventSource(`/api/research/runs/${id}/events`);
@@ -70,6 +71,7 @@ function onEvent(ev) {
   }
   if (ev.stage === "belief" && ev.status === "done" && ev.data?.result) meter(ev.data.result);
   if (ev.stage === "complete") {
+    document.body.classList.remove("is-running");
     $("#goalForm").hidden = true; $("#hearing").hidden = true;
     loadHealth();
     $("#runTitle").textContent = ev.status === "done" ? "Research completed" : "Research stopped";
