@@ -3,7 +3,7 @@
   --ink: #e8ece6; --ink2: #aab5ad; --ink3: #75827a;
   --accent: #d9f36b; --accent2: #7fd7c4;
   --fact: #7fb8ff; --exp: #f2b86b; --inf: #c79bff; --ref: #8fd6a8; --rep: #b5b5a0; --warn: #ff8a7a;
-  --serif: "Outfit", system-ui, sans-serif; --sans: "Outfit", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  --serif: "Instrument Serif", Georgia, serif; --sans: "Outfit", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
   --t0: #6fd39a; --t1: #66352f; --t2: #2e5540; --t3: #ff8a7a; --t4: #f5b454; --t5: #8fd6a8; --t6: #4b3b66; --t7: #1b1822; --t8: #c97a70; --t9: #5e4a2c; --t10: #57431c; --t11: #4a4a3e; --t12: #2f4a66; --t13: #262b12; --t14: #1c2713; --t15: #6fa8ff; --t16: #111;
   --shadow: none; --glass: rgba(15,19,17,.85);
 }
