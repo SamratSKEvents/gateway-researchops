@@ -417,3 +417,18 @@ table.v-mx tr.v-rowbad th, table.v-mx tr.v-rowbad td b { color: var(--warn); } t
 .v-tornado { display: grid; gap: 6px; } .v-trow { display: grid; grid-template-columns: 110px 1fr 120px; gap: 10px; align-items: center; font-size: 12px; }
 .v-tbar { position: relative; height: 14px; background: var(--bg3); border-radius: 3px; } .v-tbar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px dashed var(--line2); }
 .v-tbar i { position: absolute; top: 2px; bottom: 2px; background: var(--accent); border-radius: 2px; }
+
+.v-btn.v-danger { background: var(--warn); color: #fff; }
+#simOut.v-worst { border-color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); }
+.v-grid { display: grid; gap: 4px; min-width: max-content; }
+.v-grid > div { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+.v-gcorner { color: var(--ink3); font: 11px var(--mono); align-self: end; }
+.v-gcol { background: var(--bg3); font-weight: 600; position: sticky; top: 0; z-index: 1; text-align: center; }
+.v-grow { background: var(--bg3); font-weight: 600; position: sticky; left: 0; z-index: 1; display: flex; align-items: center; }
+.v-gcell { min-height: 74px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--line); }
+.v-gfill { background: color-mix(in srgb, var(--accent) 14%, var(--bg2)); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.v-gfill span { font-weight: 600; } .v-gcites { margin-top: 6px; font-size: 11px; }
+.v-gempty { color: var(--ink3); font-size: 11px; justify-content: center; align-items: center;
+  background: repeating-linear-gradient(45deg, var(--bg2), var(--bg2) 6px, var(--bg3) 6px, var(--bg3) 12px); }
+.v-gsum { text-align: center; color: var(--ink3); font: 11px var(--mono); display: flex; flex-direction: column; justify-content: center; }
+.v-gsum b { font-size: 15px; color: var(--ink); }

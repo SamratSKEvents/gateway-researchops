@@ -158,11 +158,11 @@ const Views = (() => {
     const c = await get("/court"), hs = Object.values(c.hearings || {});
     P("court").innerHTML = `<div class="v-toolbar"><form id="courtForm"><input name="claim" placeholder="Claim id to put on trial, e.g. c412"><button class="v-btn v-small">Hold hearing</button></form>
       <label class="v-muted">Voice speed <select id="vspeed"><option>0.8</option><option selected>1</option><option>1.25</option><option>1.5</option></select></label>
-      ${c.status && c.status !== "done" ? chip("hearings running…", "mid") : ""}</div>
+      ${c.status === "running" || c.status === "queued" ? chip("hearings running…", "mid") : ""}</div>
       ${hs.map((h, i) => `<section class="v-card"><h3>${chip(h.ruling, sev(h.ruling))} ${esc(h.claim_text.slice(0, 160))} <button class="v-btn v-small v-ghost" data-play="${i}">▶ Play hearing</button></h3>
         <p class="v-muted">${esc(h.rationale)}</p>${h.turns.map((t) => `<div class="v-turn ${t.role.toLowerCase()}"><b>${esc(t.role)}</b><p>${esc(t.thesis || t.statement)}</p>
         ${(t.points || []).map((p) => `<p class="v-pt"><b>${esc(p.label)}:</b> ${esc(p.text)} ${cites(p.cites)}</p>`).join("")}
-        ${t.verification?.ruling && t.verification.ruling !== "no citation" ? chip(t.verification.ruling, sev(t.verification.ruling)) : ""}</div>`).join("")}</section>`).join("") || empty("No hearings yet — they run in the background after the report.")}`;
+        ${t.verification?.ruling && t.verification.ruling !== "no citation" ? chip(t.verification.ruling, sev(t.verification.ruling)) : ""}</div>`).join("")}</section>`).join("") || empty(c.status === "running" || c.status === "queued" ? "Hearings are running in the background…" : "No hearings yet — enter a claim id above (e.g. from the Verdict or Evidence views) and press Hold hearing.")}`;
     $("#courtForm").onsubmit = async (e) => { e.preventDefault(); const id = e.target.claim.value.trim(); if (!id) return; e.target.querySelector("button").textContent = "Hearing…"; await post("/court", { claim: id }); court(); };
     P("court").querySelectorAll("[data-play]").forEach((b) => (b.onclick = () => speak(hs[+b.dataset.play].turns)));
   }
@@ -180,7 +180,13 @@ const Views = (() => {
   // ---------- autopsy ----------
   async function autopsy() {
     const { status, autopsy: a } = await get("/autopsy");
-    if (!a) return (P("autopsy").innerHTML = empty(status ? `Autopsy ${status}…` : "The autopsy runs in the background after the report."));
+    if (!a) {
+      const busy = status === "running" || status === "queued";
+      P("autopsy").innerHTML = empty(busy ? `Red-team autopsy ${status}… (it runs in the background after the report)` : status === "interrupted" ? "The autopsy was interrupted before it finished." : "No red-team autopsy for this run yet.")
+        + (busy ? "" : `<button class="v-btn" id="audGo">Run red-team autopsy now</button>`);
+      const btn = $("#audGo"); if (btn) btn.onclick = async () => { btn.textContent = "Auditing (about 10–30 s)…"; btn.disabled = true; await post("/autopsy"); autopsy(); };
+      return;
+    }
     const draw = (f) => a.findings.filter((x) => !f || x.severity === f).map((x) => `<div class="v-card v-finding"><b>${chip(x.severity, sev(x.severity))} ${esc(x.title)}</b>
       <span class="v-muted">${esc(x.auditor_name)} · ${esc(x.basis)}</span><p>${esc(x.description)}</p><p class="v-muted">${esc(x.why_it_matters)}</p>
       ${x.recommended_action ? `<p><b>Action:</b> ${esc(x.recommended_action)}</p>` : ""}${x.claims?.length ? `<p>${cites(x.claims)}</p>` : ""}</div>`).join("");
@@ -202,7 +208,9 @@ const Views = (() => {
     }
     if (ec.simulation?.error) return (P("economics").innerHTML = empty(ec.simulation.error));
     const params = Object.entries(ec.params);
-    P("economics").innerHTML = `<section class="v-card"><h3>Parameters <span class="v-muted">(${esc(ec.currency || "")}, per customer per month) — drag to test</span></h3>
+    P("economics").innerHTML = `<section class="v-card"><h3>Monte Carlo simulation <span class="v-muted">unit economics per customer per month (${esc(ec.currency || "")})</span></h3>
+      <div class="v-toolbar"><button class="v-btn v-small v-danger" id="mcWorst">⚠ Show worst case</button><button class="v-btn v-small v-ghost" id="mcBest">Show best case</button>
+      <button class="v-btn v-small v-ghost" id="mcReset">Reset to likely</button><span class="v-muted" id="mcMode">Likely values — drag any parameter to test it</span></div>
       ${params.map(([k, p]) => { const lo = Math.min(p.low, p.value) * 0.5, hi = Math.max(p.high, p.value) * 1.5 || 1;
         return `<div class="v-slider"><label>${esc(k)} ${chip(p.basis, p.basis === "evidence" ? "good" : "mid")} ${cites(p.cites)}</label>
         <input type="range" data-k="${k}" min="${lo}" max="${hi}" step="${(hi - lo) / 200}" value="${p.value}"><output>${p.value}</output></div>`; }).join("")}</section>
@@ -221,9 +229,23 @@ const Views = (() => {
       ${(s.tornado || []).length ? `<h4>What moves the outcome most (LTV/CAC swing, low → high)</h4>${tornadoChart(s.tornado)}` : ""}
       <div class="v-mc">${histo("LTV / CAC across " + s.trials + " simulated futures", s.histogram?.ltv_cac, 3, "target 3×")}
       ${histo("Payback period (months)", s.histogram?.payback_months, 12, "12 months")}</div>
-      <p class="v-muted">Monte Carlo: every parameter is drawn from its low–likely–high range ${s.trials} times. LTV/CAC p10–p90: ${s.distribution.ltv_cac ? `${s.distribution.ltv_cac.p10} – ${s.distribution.ltv_cac.p90}` : "—"}. Assumed (no evidence): ${s.assumed.join(", ") || "none"}.</p>`);
+      <p class="v-muted">Monte Carlo simulation: every parameter is drawn from its low–likely–high range ${s.trials} times. LTV/CAC p10–p90: ${s.distribution.ltv_cac ? `${s.distribution.ltv_cac.p10} – ${s.distribution.ltv_cac.p90}` : "—"}. Assumed (no evidence): ${s.assumed.join(", ") || "none"}.</p>`);
     show(ec.simulation); post("/economics/simulate", { overrides: {} }).then((x) => !x.error && show(x));   // always show the latest model (scenarios, tail risk)
     let tm, pinned = {};
+    const UNFAV = { price: "low", variable_cost: "high", cac: "high", churn: "high", fixed_cost: "high" };
+    const setAll = async (side, label) => {
+      pinned = {};
+      P("economics").querySelectorAll("input[type=range]").forEach((r) => {
+        const p = ec.params[r.dataset.k], want = side === "likely" ? "value" : side === "worst" ? UNFAV[r.dataset.k] : (UNFAV[r.dataset.k] === "low" ? "high" : "low");
+        const v = p[want] ?? p.value; r.value = v; r.nextElementSibling.textContent = (+v).toFixed(r.dataset.k === "churn" ? 3 : 0);
+        if (side !== "likely") pinned[r.dataset.k] = v;
+      });
+      $("#mcMode").innerHTML = label; $("#simOut").classList.toggle("v-worst", side === "worst");
+      show(await post("/economics/simulate", { overrides: pinned }));
+    };
+    $("#mcWorst").onclick = () => setAll("worst", "<b class='v-bad'>Worst case</b>: price at its low, every cost, churn and acquisition cost at its high");
+    $("#mcBest").onclick = () => setAll("best", "<b class='v-good'>Best case</b>: every parameter at its favourable bound");
+    $("#mcReset").onclick = () => setAll("likely", "Likely values — drag any parameter to test it");
     P("economics").querySelectorAll("input[type=range]").forEach((r) => (r.oninput = () => {
       r.nextElementSibling.textContent = (+r.value).toFixed(r.dataset.k === "churn" ? 3 : 0); pinned[r.dataset.k] = +r.value;
       clearTimeout(tm); tm = setTimeout(async () => show(await post("/economics/simulate", { overrides: pinned })), 250);
@@ -273,8 +295,15 @@ const Views = (() => {
     }
     P("matrix").innerHTML = `<div class="v-toolbar"><span class="v-muted">${m.rows.length} options × ${m.columns.length} attributes · ${pct(m.coverage)} of cells backed by a cited claim; blanks were not stated in the evidence.</span>
       <button class="v-btn v-small v-ghost" id="mxRe">Rebuild</button></div>
-      <div class="v-mxwrap"><table class="v-mx"><tr><th></th>${m.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>
-      ${m.rows.map((r) => `<tr><th>${esc(r)}</th>${m.columns.map((c) => { const x = m.cells[r][c]; return x ? `<td>${esc(x.value)}<div>${cites(x.cites)}</div></td>` : `<td class="v-blank">—</td>`; }).join("")}</tr>`).join("")}</table></div>`;
+      <div class="v-mxwrap"><div class="v-grid" style="grid-template-columns: 140px repeat(${m.columns.length}, minmax(118px, 1fr)) 64px">
+        <div class="v-gcorner">Option \ Attribute</div>${m.columns.map((c) => `<div class="v-gcol">${esc(c)}</div>`).join("")}<div class="v-gcol v-gsum">evidence</div>
+        ${m.rows.map((r) => { const n = m.columns.filter((c) => m.cells[r][c]).length;
+          return `<div class="v-grow">${esc(r)}</div>${m.columns.map((c) => { const x = m.cells[r][c];
+            return x ? `<div class="v-gcell v-gfill"><span>${esc(x.value)}</span><div class="v-gcites">${cites(x.cites)}</div></div>` : `<div class="v-gcell v-gempty" title="Not stated in the evidence">not stated</div>`; }).join("")}
+            <div class="v-gsum"><b>${n}</b>/${m.columns.length}</div>`; }).join("")}
+        <div class="v-gcorner v-gsum">coverage</div>${m.columns.map((c) => { const n = m.rows.filter((r) => m.cells[r][c]).length;
+          return `<div class="v-gsum"><b>${n}</b>/${m.rows.length}</div>`; }).join("")}<div class="v-gsum"><b>${pct(m.coverage)}</b></div>
+      </div></div>`;
     $("#mxRe").onclick = async () => { $("#mxRe").textContent = "Rebuilding…"; await post("/matrix"); matrix(); };
   }
 
