@@ -26,7 +26,9 @@ SCHEMA = {"type": "object", "required": ["applicable", "currency", "params"], "p
 SYSTEM = ("You set up a per-customer monthly unit-economics model for a business decision. For each parameter give a likely "
           "value and a low-high range. basis=evidence ONLY if a listed claim states the number (cite its id; convert to per "
           "month and to one currency); otherwise basis=assumption with a conservative range and a note saying why. churn is a "
-          "monthly fraction (0.05 = 5%). applicable=false if the decision is not about a business selling to customers.\n"
+          "monthly fraction (0.05 = 5%). UNITS MATTER: price and variable_cost are PER CUSTOMER PER MONTH (one subscriber or "
+          "one regular buyer), never a business total; put rent, kitchens, salaries and other totals in fixed_cost. variable_cost "
+          "must normally be below price. applicable=false if the decision is not about a business selling to customers.\n"
           "Parameters:\n" + "\n".join(f"- {k}: {v}" for k, v in PARAMS.items()))
 
 

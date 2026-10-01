@@ -323,7 +323,17 @@ const Graph = (() => {
 
   // ---------- view ----------
   let T = { x: 0, y: 0, k: 1 }, userMoved = false, drag = null;
-  function applyView() { view.setAttribute("transform", `translate(${T.x},${T.y}) scale(${T.k})`); }
+  function applyView() {
+    // keep at least part of the graph on screen: wheel / drag could push it fully out of view (looked like a black-out)
+    if (nodes?.length && svg.clientWidth) {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const a of nodes) { x0 = Math.min(x0, a.x - a.w / 2); y0 = Math.min(y0, a.y - a.h / 2); x1 = Math.max(x1, a.x + a.w / 2); y1 = Math.max(y1, a.y + a.h / 2); }
+      const W = svg.clientWidth, H = svg.clientHeight, m = 120;
+      T.x = Math.min(Math.max(T.x, m - x1 * T.k), W - m - x0 * T.k);
+      T.y = Math.min(Math.max(T.y, m - y1 * T.k), H - m - y0 * T.k);
+    }
+    view.setAttribute("transform", `translate(${T.x},${T.y}) scale(${T.k})`);
+  }
   function fit() {
     if (!nodes?.length) return;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
