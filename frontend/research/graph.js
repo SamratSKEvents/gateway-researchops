@@ -26,7 +26,7 @@ const Graph = (() => {
     legend.innerHTML = `<span><i class="lg-card"></i>stage (checklist / progress)</span><span><i class="lg-src"></i>source</span>
       <span><i class="lg-up"></i>claim supports</span><span><i class="lg-down"></i>claim opposes</span><span><i class="lg-hyp"></i>hypothesis · ⓘ assumptions</span>
       <span><i class="lg-rel"></i>source → claim → hypothesis</span>`;
-    const fitBtn = document.createElement("button"); fitBtn.className = "kg-fit"; fitBtn.textContent = "Reset view"; fitBtn.title = "Scroll to move · Ctrl/⌘ + scroll to zoom · drag to pan"; fitBtn.onclick = () => { userMoved = false; fit(); };
+    const fitBtn = document.createElement("button"); fitBtn.className = "kg-fit"; fitBtn.textContent = "Reset view"; fitBtn.title = "Drag nodes to rearrange · scroll to move · Ctrl/⌘ + scroll to zoom · drag background to pan · Reset restores the layout"; fitBtn.onclick = () => { userMoved = false; nodes.forEach((n) => delete n.manual); layout(); fit(); };
     host.append(legend, fitBtn);
     panZoom(host);
   }
@@ -144,7 +144,16 @@ const Graph = (() => {
     n.col = n.col ?? COL[n.id] ?? 0; n.x = n.x ?? colX(n.col); n.y = n.y ?? 0;
     nodes.push(n); byId[n.id] = n;
     n.el = el("g"); n.el.style.opacity = 0;
-    n.el.onclick = (e) => { e.stopPropagation(); const h = typeof n.info === "function" ? n.info() : n.info; if (h) openInspector(h); };
+    n.el.onclick = (e) => {
+      e.stopPropagation();
+      if (n.justDragged) { n.justDragged = false; return; }       // a drag is not a click
+      const h = typeof n.info === "function" ? n.info() : n.info; if (h) openInspector(h);
+    };
+    n.el.addEventListener("pointerdown", (e) => {                   // drag any node; its arrows follow
+      if (e.button !== 0 || e.target.closest("button, a, [data-act]")) return;
+      e.stopPropagation();
+      drag = { n, x0: e.clientX, y0: e.clientY, nx: n.x, ny: n.y, moved: false };
+    });
     gNodes.append(n.el); render(n); schedule();
     return n;
   }
@@ -182,7 +191,10 @@ const Graph = (() => {
     place(nodes.filter((n) => n.card === "source"),
       (s) => { const ys = (s.feeds || []).map((id) => byId[id]?.y).filter((v) => v != null); return ys.length ? ys.reduce((a, b) => a + b) / ys.length : null; }, colX(2), start);
     place(nodes.filter((n) => n.card === "q"), () => null, colX(0), topOf[0] + 10);
-    for (const n of nodes) { n.el.setAttribute("transform", `translate(${n.x},${n.y})`); n.el.style.opacity = 1; }
+    for (const n of nodes) {
+      if (n.manual) { n.x = n.manual.x; n.y = n.manual.y; }          // user-placed nodes stay where they were dropped
+      n.el.setAttribute("transform", `translate(${n.x},${n.y})`); n.el.style.opacity = 1;
+    }
     drawLinks();
     if (!userMoved) fit();
   }
@@ -310,7 +322,7 @@ const Graph = (() => {
   }
 
   // ---------- view ----------
-  let T = { x: 0, y: 0, k: 1 }, userMoved = false;
+  let T = { x: 0, y: 0, k: 1 }, userMoved = false, drag = null;
   function applyView() { view.setAttribute("transform", `translate(${T.x},${T.y}) scale(${T.k})`); }
   function fit() {
     if (!nodes?.length) return;
@@ -330,7 +342,21 @@ const Graph = (() => {
     }, { passive: false });
     svg.addEventListener("pointerdown", (e) => { if (!e.target.closest(".kg-node")) { userMoved = true; pan = { x: e.clientX - T.x, y: e.clientY - T.y }; } });
     window.addEventListener("pointermove", (e) => { if (pan) { T.x = e.clientX - pan.x; T.y = e.clientY - pan.y; applyView(); } });
-    window.addEventListener("pointerup", () => (pan = null));
+    window.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const dx = (e.clientX - drag.x0) / T.k, dy = (e.clientY - drag.y0) / T.k;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      drag.moved = true; userMoved = true;
+      const n = drag.n;
+      n.x = drag.nx + dx; n.y = drag.ny + dy; n.manual = { x: n.x, y: n.y };
+      n.el.style.transition = "none";
+      n.el.setAttribute("transform", `translate(${n.x},${n.y})`);
+      drawLinks();
+    });
+    window.addEventListener("pointerup", () => {
+      pan = null;
+      if (drag) { if (drag.moved) drag.n.justDragged = true; drag.n.el.style.transition = ""; drag = null; }
+    });
     new ResizeObserver(() => !userMoved && fit()).observe(host);
   }
 
