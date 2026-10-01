@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ResearchOps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="demo-banner">Live demo with recorded research runs · open a run from <b>Past investigations</b> · new research, Ask and what-if need the live backend (see the repository README)</div>
+<header class="top">
+  <a class="brand" href="./" aria-label="Home"><span class="dot"></span>ResearchOps</a>
+  <form id="topSearch" class="top-search" hidden>
+    <input name="q" placeholder="Research another question…" autocomplete="off" aria-label="Research question">
+  </form>
+  <button id="healthBadge" class="health unknown" title="Research source health — click for details">SEARCH: …</button><button class="theme-toggle" id="themeToggle" title="Light / dark">◐</button><details class="recent" style="margin-left:16px"><summary>Past investigations</summary><ul id="recentList"></ul></details>
+</header>
+
+<main id="landing" class="landing">
+  <h1>Ask a business question.<br><em>I'll research it.</em></h1>
+  <form id="heroSearch" class="hero-search">
+    <input name="q" placeholder="e.g. Should we launch an e-scooter subscription in Bengaluru?" autocomplete="off" aria-label="Research question" autofocus>
+    <button>Research</button>
+  </form>
+  <div class="constraints">
+    <input id="cGeo" placeholder="Geography" aria-label="Geography">
+    <input id="cScope" placeholder="Scope" aria-label="Scope">
+    <input id="cTime" placeholder="Timeframe" aria-label="Timeframe">
+    <select id="cDepth" aria-label="Depth"><option value="">Depth</option><option value="quick">Quick</option><option value="standard">Standard</option><option value="deep">Deep</option></select>
+  </div>
+  <div class="examples" id="examples"></div>
+</main>
+
+<section id="runView" class="run" hidden>
+  <button class="lograil" id="logShow" title="Show research log">›</button>
+  <aside class="log">
+    <div class="log-head">
+      <button class="loghide" id="logHide" title="Hide research log">‹</button>
+      <div>
+        <p class="eyebrow" id="runQuery"></p>
+        <h2 id="runTitle">Researching…</h2>
+      </div>
+      <div class="meter" id="meter" hidden></div>
+      <div class="counters" id="counters"></div>
+      <form id="goalForm" class="goal-form" hidden><input name="g" placeholder="Change the goal mid-run (e.g. focus on delivery riders)…" autocomplete="off"><button>Update</button></form>
+    </div>
+    <ol id="timeline" class="timeline"></ol>
+  </aside>
+  <div class="stage">
+    <div id="hearing" class="hearing" hidden></div>
+    <div class="stepper" id="stepper"></div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="graph" class="on">Graph</button>
+      <button data-tab="verdict">Verdict</button>
+      <button data-tab="matrix">Matrix</button>
+      <button data-tab="report">Report</button>
+      <button data-tab="ask">Ask</button>
+      <select id="moreTabs" class="more" aria-label="More views">
+        <option value="">More ▾</option>
+        <option value="agents">Agents &amp; conversation</option><option value="court">Evidence court</option>
+        <option value="autopsy">Red-team autopsy</option><option value="economics">Monte Carlo simulation</option>
+        <option value="actionplan">Action plan</option><option value="whatif">What-if lab</option><option value="planner">Planner</option><option value="replay">Replay</option>
+        <option value="memory">Research memory</option><option value="trial">Trial</option><option value="brief">Evidence by hypothesis</option>
+        <option value="claims">Claims &amp; debt</option><option value="sources">Sources</option>
+      </select>
+    </nav>
+    <div class="panel graph-panel" id="panel-graph"></div>
+    <div class="panel" id="panel-verdict" hidden><div class="waiting" id="verdictWaiting">The verdict appears once the evidence has been weighed, argued and verified. Answer the questions above when asked; watch the log on the left.</div><div id="verdict"></div></div>
+    <div class="panel" id="panel-trial" hidden><div id="trial"></div></div>
+    <div class="panel" id="panel-brief" hidden><div class="waiting" id="briefWaiting">The brief is written from the collected evidence once research completes. Watch the research log on the left; click any step to inspect what it found.</div><div id="brief"></div></div>
+    <div class="panel" id="panel-claims" hidden><div id="claims"></div></div>
+    <div class="panel" id="panel-sources" hidden><div id="sources"></div></div>
+    <div class="panel" id="panel-report" hidden></div>
+    <div class="panel" id="panel-ask" hidden></div>
+    <div class="panel" id="panel-matrix" hidden></div>
+    <div class="panel" id="panel-agents" hidden></div>
+    <div class="panel" id="panel-court" hidden></div>
+    <div class="panel" id="panel-autopsy" hidden></div>
+    <div class="panel" id="panel-economics" hidden></div>
+    <div class="panel" id="panel-whatif" hidden></div>
+    <div class="panel" id="panel-actionplan" hidden></div>
+    <div class="panel" id="panel-planner" hidden></div>
+    <div class="panel" id="panel-replay" hidden></div>
+    <div class="panel" id="panel-memory" hidden></div>
+  </div>
+</section>
+
+<aside id="inspector" class="inspector" hidden aria-label="Inspector">
+  <button class="close" id="inspClose" aria-label="Close">×</button>
+  <div id="inspBody"></div>
+</aside>
+
+<script src="demo-shim.js"></script>
+<script src="graph.js"></script>
+<script src="app.js"></script>
+<script src="views.js"></script>
+</body>
+</html>
