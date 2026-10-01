@@ -144,7 +144,7 @@ const Graph = (() => {
     n.col = n.col ?? COL[n.id] ?? 0; n.x = n.x ?? colX(n.col); n.y = n.y ?? 0;
     nodes.push(n); byId[n.id] = n;
     n.el = el("g"); n.el.style.opacity = 0;
-    n.el.onclick = (e) => {
+    n.el.ondblclick = (e) => {      // graph: details open on double click
       e.stopPropagation();
       if (n.justDragged) { n.justDragged = false; return; }       // a drag is not a click
       const h = typeof n.info === "function" ? n.info() : n.info; if (h) openInspector(h);
