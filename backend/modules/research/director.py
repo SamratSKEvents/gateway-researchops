@@ -101,20 +101,26 @@ class Director(Run):
         return out[:n]
 
     async def post_research(self):
+        """Background work after results are shown. Independent stages run concurrently; the autopsy waits for the court."""
         bg = self.result.setdefault("background", {})
-        bg.update(entities="running", court="queued", autopsy="queued")
-        await self.stage("entities", "Extract named entities for research memory", self.extract_entities)
-        bg["entities"], bg["court"] = "done", "running"
-        self.save()
-        for cid in self.court_targets():
-            await self.stage("court", f"Evidence court: {self.claims[cid]['text'][:60]}", lambda cid=cid: self.hold_court(cid))
-            self.save()
-        bg["court"] = "done"
-        bg["autopsy"] = "running"
-        await self.stage("autopsy", "Research autopsy: red-team audit of the finished research", self.run_autopsy)
-        bg["autopsy"], bg["economics"] = "done", "running"
-        await self.stage("economics", "Unit economics from the evidence + Monte Carlo", self.run_economics)
-        bg["economics"] = "done"
+        bg.update(entities="running", court="running", autopsy="queued", economics="running")
+
+        async def entities():
+            await self.stage("entities", "Extract named entities for research memory", self.extract_entities)
+            bg["entities"] = "done"
+
+        async def courts():
+            await asyncio.gather(*(self.stage("court", f"Evidence court: {self.claims[c]['text'][:60]}", lambda c=c: self.hold_court(c))
+                                   for c in self.court_targets()))
+            bg["court"], bg["autopsy"] = "done", "running"
+            await self.stage("autopsy", "Research autopsy: red-team audit of the finished research", self.run_autopsy)
+            bg["autopsy"] = "done"
+
+        async def econ():
+            await self.stage("economics", "Unit economics from the evidence + Monte Carlo", self.run_economics)
+            bg["economics"] = "done"
+
+        await asyncio.gather(entities(), courts(), econ())
         from ..ai_runtime import usage_of
         self.result["llm_usage"] = usage_of(self.id)
         self.save()

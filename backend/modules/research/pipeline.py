@@ -109,6 +109,12 @@ class Run:
         async def one_web(q):
             async with web_sem:
                 r = await ss.web(q["q"])
+                on_topic = sum(self._relevant(f"{x.get('title', '')} {x.get('snippet', '')} {x['url']}") for x in r["results"])
+                if r["results"] and on_topic / len(r["results"]) < 0.3 and r["provider"] != "duckduckgo":
+                    res, a = await ss._one("duckduckgo", q["q"], q["q"])     # provider answered off-topic: ask the fallback
+                    r["attempts"].append(a)
+                    if res:
+                        r.update(results=res, provider="duckduckgo", cached=a["status"] == "cached")
             counters["specific"] += r["specific"]; counters["cached"] += r["cached"]; counters["done"] += 1
             self.search_results[q["q"]] = {"ok": bool(r["results"]), "results": r["results"], "provider": r["provider"], "task": q["id"]}
             used = r["provider"] or "none"

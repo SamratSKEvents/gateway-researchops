@@ -9,9 +9,10 @@ KEY = os.getenv("LLM_API_KEY", "")
 # over to the others on 429 / 401 / 5xx, so one agent's rate limit does not stall the rest.
 KEYS = [k.strip() for k in os.getenv("LLM_API_KEYS", "").split(",") if k.strip()] or ([KEY] if KEY else [])
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
+EMBED_BASE = os.getenv("EMBED_BASE_URL", BASE)      # hosted chat APIs (Groq) have no embeddings: keep them on local Ollama
 _LOCAL = "11434" in BASE or "localhost" in BASE or "127.0.0.1" in BASE
 _calls: deque = deque(maxlen=200)
-_sem = asyncio.Semaphore(int(os.getenv("LLM_CONCURRENCY", "2")))
+_sem = asyncio.Semaphore(int(os.getenv("LLM_CONCURRENCY", "2" if _LOCAL else "6")))   # one local GPU vs a hosted API
 # Token accounting + optional rate budget. LLM_TPM = tokens per minute allowed PER KEY (e.g. a Groq free-tier limit);
 # calls wait (never fail) until the rolling 60 s window has room. 0 = unlimited (local model).
 TPM = int(os.getenv("LLM_TPM", "0"))
@@ -122,8 +123,8 @@ async def embed(texts):
         async with httpx.AsyncClient(timeout=120) as c:
             out = []
             for i in range(0, len(texts), 64):
-                r = await c.post(f"{BASE}/embeddings", json={"model": EMBED_MODEL, "input": texts[i:i + 64]},
-                                 headers={"Authorization": f"Bearer {KEY}"} if KEY else {})
+                r = await c.post(f"{EMBED_BASE}/embeddings", json={"model": EMBED_MODEL, "input": texts[i:i + 64]},
+                                 headers={"Authorization": f"Bearer {KEY}"} if (KEY and EMBED_BASE == BASE) else {})
                 r.raise_for_status()
                 out += [d["embedding"] for d in r.json()["data"]]
         _log("embed", t0, True, f"{len(texts)} texts", f"{len(out)} vectors")
