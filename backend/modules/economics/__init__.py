@@ -73,9 +73,13 @@ def _metrics(price, var, cac, churn, fixed):
 
 def simulate(params: dict, overrides: dict | None = None, trials: int = 2000, seed: int = 7) -> dict:
     P = {k: dict(v) for k, v in params.items()}
-    for k, v in (overrides or {}).items():       # a what-if slider pins a parameter
+    for k, v in (overrides or {}).items():       # a slider / scenario moves the likely value; the uncertainty range stays
         if k in P:
-            P[k].update(value=float(v), low=float(v), high=float(v), basis="override")
+            v, d = float(v), float(v) - P[k]["value"]      # shift the whole range with the likely value (same width)
+            lo, hi = max(0.0, P[k]["low"] + d), max(0.0, P[k]["high"] + d)
+            if k == "churn":
+                lo, hi = min(max(lo, 0.001), 0.99), min(max(hi, 0.001), 0.99)
+            P[k].update(value=v, low=min(lo, v), high=max(hi, v), basis="override")
     missing = [k for k in ("price", "variable_cost", "cac", "churn") if k not in P]
     if missing:
         return {"error": f"missing parameters: {', '.join(missing)}"}

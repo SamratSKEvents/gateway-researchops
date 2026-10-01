@@ -28,3 +28,14 @@ def test_simulate_metrics_and_override():
     r2 = EC.simulate(P, {"price": 500})
     assert r2["base"]["margin"] == -100 and r2["probabilities"]["margin_positive"] < 0.5
     assert "missing" in EC.simulate({"price": P["price"]})["error"]
+
+
+def test_override_moves_likely_value_but_keeps_uncertainty():
+    P = {"price": {"value": 1500, "low": 1300, "high": 1600, "basis": "evidence"},
+         "variable_cost": {"value": 600, "low": 500, "high": 900, "basis": "assumption"},
+         "cac": {"value": 1200, "low": 800, "high": 2000, "basis": "assumption"},
+         "churn": {"value": 0.1, "low": 0.06, "high": 0.15, "basis": "assumption"}}
+    r = EC.simulate(P, {"price": 1300, "variable_cost": 900, "cac": 2000, "churn": 0.15})   # worst-case corner
+    assert r["base"]["margin"] == 400
+    d = r["distribution"]["ltv_cac"]
+    assert d["p10"] < d["p90"]                                   # still a distribution, not a collapsed single value
