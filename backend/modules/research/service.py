@@ -146,3 +146,19 @@ def economics_simulate(run_id: str, overrides: dict, trials: int = 2000) -> dict
     from .. import economics
     ec = ((run_snapshot(run_id) or {}).get("result") or {}).get("economics")
     return economics.simulate(ec["params"], overrides, trials) if ec else None
+
+
+async def ask_followup(run_id: str, question: str) -> dict:
+    from .. import ask
+    snap = run_snapshot(run_id)
+    if not snap:
+        from fastapi import HTTPException
+        raise HTTPException(404, "no such run")
+    rec = await ask.answer(snap, question)
+    hist = (live[run_id].result if run_id in live else snap["result"]).setdefault("followups", [])
+    hist.append({k: rec[k] for k in ("question", "answer", "needs_more_research", "verification")})
+    if run_id in live:
+        live[run_id].save()
+    else:
+        _persist(run_id, "followups", None, hist)
+    return rec

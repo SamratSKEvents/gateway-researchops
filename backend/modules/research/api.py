@@ -249,3 +249,25 @@ def run_deck(rid: str):
         raise HTTPException(409, "run has no report yet")
     return StreamingResponse(build(s), media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                              headers={"Content-Disposition": f'attachment; filename="researchops_{rid}.pptx"'})
+
+
+class FollowReq(BaseModel):
+    question: str
+
+
+@router.post("/runs/{rid}/ask")
+async def ask_followup(rid: str, req: FollowReq):
+    """Follow-up question answered by RAG over the run's evidence + the document store; cited and verified."""
+    if not req.question.strip():
+        raise HTTPException(400, "empty question")
+    return await service.ask_followup(rid, req.question)
+
+
+@router.get("/runs/{rid}/report.pdf")
+async def run_report_pdf(rid: str):
+    from fastapi.responses import Response
+    from ..deck.report import build_pdf
+    s = _snap(rid)
+    if not s["result"].get("report"):
+        raise HTTPException(409, "run has no report yet")
+    return Response(await build_pdf(s), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="report_{rid}.pdf"'})
