@@ -124,13 +124,14 @@ async def state(runs: list[dict], question: str = "", embed=_embed, judge=nli.ju
     related = [r for r in runs if (rel.get(r["id"]) or 0) >= related_threshold] if question else runs
     if len(related) > 1 and (judge is not nli.judge or nli.available()):
         pairs, meta = [], []
-        tops = {r["id"]: _top_claims(r, 12) for r in related}
+        related = sorted(related, key=lambda r: -(rel.get(r["id"]) or 0))[:5]
+        tops = {r["id"]: _top_claims(r, 8) for r in related}
         for i, a in enumerate(related):
             for b in related[i + 1:]:
                 for ca in tops[a["id"]]:
                     for cb in tops[b["id"]]:
                         pairs.append((ca["text"], cb["text"])); meta.append((a, ca, b, cb))
-        pairs, meta = pairs[:1500], meta[:1500]
+        pairs, meta = pairs[:400], meta[:400]      # ponytail: capped for responsiveness; raise if memory grows useful
         vecs = await embed([t for p in pairs for t in p]) if (embed and pairs) else None
         from ..classify import _cos, RELATED_MIN
         for k, ((a, ca, b, cb), sc) in enumerate(zip(meta, await judge(pairs) if pairs else [])):

@@ -117,18 +117,42 @@ async def whatif_ask(run_id: str, question: str) -> dict | None:
     return rec
 
 
-async def memory_state(question: str = "", backfill: int = 3) -> dict:
-    """Cross-run memory. Runs saved before entity extraction existed get their entities extracted (a few per call) and cached."""
+_mem_cache: dict = {}
+_backfilling = set()
+
+
+async def _backfill_entities(snaps):
+    """Older runs get their entities extracted in the background (never inside a request)."""
     from .. import memory
-    ids = [r["id"] for r in list_runs(200)] + [rid for rid in live if rid not in {r["id"] for r in list_runs(200)}]
-    snaps = [s for s in (run_snapshot(i) for i in ids) if s]
-    for s in [s for s in snaps if s.get("status") == "done" and "entities" not in s.get("result", {})][:backfill]:
+    for s in snaps:
+        if s["id"] in _backfilling:
+            continue
+        _backfilling.add(s["id"])
         try:
-            s["result"]["entities"] = await memory.entities_for(s)
-            _persist(s["id"], "entities", None, s["result"]["entities"])
+            ents = await memory.entities_for(s)
+            _persist(s["id"], "entities", None, ents)
         except Exception:
             pass
-    return await memory.state(snaps, question)
+    _mem_cache.clear()
+
+
+async def memory_state(question: str = "") -> dict:
+    """Cross-run memory, cached until a run file changes. Missing entities are backfilled in the background."""
+    from .. import memory
+    files = sorted(RUNS.glob("*.json"), key=lambda f: -f.stat().st_mtime)[:60]
+    key = (question, tuple((f.name, int(f.stat().st_mtime)) for f in files), tuple(sorted(live)))
+    if key in _mem_cache:
+        return _mem_cache[key]
+    snaps = [s for s in (run_snapshot(f.stem) for f in files) if s]
+    snaps += [live[r].snapshot() for r in live if r not in {s["id"] for s in snaps}]
+    todo = [s for s in snaps if s.get("status") == "done" and "entities" not in s.get("result", {}) and s["id"] not in _backfilling]
+    if todo:
+        asyncio.create_task(_backfill_entities(todo[:6]))
+    out = await memory.state(snaps, question)
+    out["health"]["entities_pending"] = len(todo)
+    _mem_cache.clear(); _mem_cache[key] = out
+    return out
+
 
 
 async def economics_for(run_id: str) -> dict | None:

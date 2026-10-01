@@ -102,7 +102,55 @@ def simulate(params: dict, overrides: dict | None = None, trials: int = 2000, se
                 counts[min(int((x - lo) / w), bins - 1)] += 1
         return {"lo": round(lo, 3), "hi": round(hi, 3), "counts": counts}
 
+    # deterministic corner cases: every parameter at its unfavourable (worst) or favourable (best) bound
+    UNFAV = {"price": "low", "variable_cost": "high", "cac": "high", "churn": "high", "fixed_cost": "high"}
+    corner = lambda side: _metrics(*[P[k][(UNFAV[k] if side == "worst" else {"low": "high", "high": "low"}[UNFAV[k]])] if k in P else 0.0   # noqa: E731
+                                     for k in ("price", "variable_cost", "cac", "churn", "fixed_cost")])
+    rnd = lambda m: {k: (round(v, 3) if v is not None else None) for k, v in m.items()}   # noqa: E731
+
+    def q(key, qq):
+        xs = sorted(x[key] for x in sims if x[key] is not None)
+        return round(xs[int(qq * (len(xs) - 1))], 3) if xs else None
+
+    scenarios = [
+        {"name": "Worst case", "how": "every parameter at its unfavourable bound", **rnd(corner("worst"))},
+        {"name": "Severe downside (p5)", "how": "5th percentile of simulated futures", **{k: q(k, .05) for k in ("margin", "ltv", "ltv_cac", "payback_months")}},
+        {"name": "Downside (p10)", "how": "10th percentile", **{k: q(k, .10) for k in ("margin", "ltv", "ltv_cac", "payback_months")}},
+        {"name": "Likely (p50)", "how": "median of simulated futures", **{k: q(k, .50) for k in ("margin", "ltv", "ltv_cac", "payback_months")}},
+        {"name": "Upside (p90)", "how": "90th percentile", **{k: q(k, .90) for k in ("margin", "ltv", "ltv_cac", "payback_months")}},
+        {"name": "Best case", "how": "every parameter at its favourable bound", **rnd(corner("best"))},
+    ]
+    # one-at-a-time sensitivity (tornado): swing each parameter low->high with the rest at their likely value
+    tornado = []
+    for k in P:
+        if P[k]["high"] <= P[k]["low"]:
+            continue
+        vals = {x: g(x) for x in ("price", "variable_cost", "cac", "churn", "fixed_cost")}
+        outs = []
+        for side in ("low", "high"):
+            vals[k] = P[k][side]
+            m = _metrics(vals["price"], vals["variable_cost"], vals["cac"], vals["churn"], vals["fixed_cost"])
+            outs.append(m["ltv_cac"])
+        if None not in outs:
+            tornado.append({"param": k, "at_low": round(outs[0], 3), "at_high": round(outs[1], 3), "swing": round(abs(outs[1] - outs[0]), 3)})
+    tornado.sort(key=lambda t: -t["swing"])
+    ltvs = [x["ltv_cac"] for x in sims if x["ltv_cac"] is not None]
+    risk = {"expected_ltv_cac": round(sum(ltvs) / len(ltvs), 3) if ltvs else None,
+            "value_at_risk_p5_ltv_cac": q("ltv_cac", .05),
+            "prob_loss_per_customer": round(sum(x["margin"] <= 0 for x in sims) / trials, 3),
+            "prob_ltv_below_cac": round(sum((x["ltv_cac"] or 0) < 1 for x in sims) / trials, 3),
+            "expected_shortfall_ltv_cac": round(sum(sorted(ltvs)[:max(1, len(ltvs) // 20)]) / max(1, len(ltvs) // 20), 3) if ltvs else None}
+    # sanity: impossible combinations the model may have read wrongly (e.g. a monthly kitchen cost taken as per-customer cost)
+    warnings = []
+    if g("variable_cost") >= g("price"):
+        warnings.append("cost to serve one customer is not below the price — check that variable_cost is per customer per month, not a total")
+    if not 0 < g("churn") < 1:
+        warnings.append("monthly churn should be a fraction between 0 and 1")
+    if g("cac") > 0 and g("price") > 0 and g("cac") > 60 * g("price"):
+        warnings.append("acquisition cost is more than five years of revenue per customer — check the unit")
+
     return {"base": {k: (round(v, 3) if v is not None else None) for k, v in base.items()},
+            "scenarios": scenarios, "tornado": tornado, "risk": risk, "warnings": warnings,
             "histogram": {"ltv_cac": hist("ltv_cac"), "payback_months": hist("payback_months")},
             "distribution": {"ltv_cac": pct("ltv_cac"), "payback_months": pct("payback_months"), "margin": pct("margin")},
             "probabilities": {"margin_positive": round(sum(x["margin"] > 0 for x in sims) / trials, 3),

@@ -164,6 +164,15 @@ def build_html(snap: dict) -> str:
             f"<tr><td>{_e(k)}</td><td class='mono'>{p['value']:g}</td><td class='mono'>{p['low']:g}–{p['high']:g}</td>"
             f"<td><span class='st {'g' if p['basis'] == 'evidence' else 'm'}'>{_e(p['basis']).upper()}</span>{cite(p['cites'])}</td><td>{_e(p['note'])}</td></tr>"
             for k, p in ec["params"].items()) + "</table>")
+        if sim.get("scenarios"):
+            body.append("<h3>Scenarios — worst case to best case</h3><table><tr><th>Scenario</th><th>Margin</th><th>LTV</th><th>LTV/CAC</th><th>Payback</th><th>How</th></tr>" + "".join(
+                f"<tr><td><b>{_e(x['name'])}</b></td><td class='mono'>{x.get('margin')}</td><td class='mono'>{x.get('ltv')}</td><td class='mono'>{x.get('ltv_cac')}</td>"
+                f"<td class='mono'>{x.get('payback_months') or 'never'}</td><td class='cite'>{_e(x['how'])}</td></tr>" for x in sim["scenarios"]) + "</table>")
+        if sim.get("tornado"):
+            body.append("<h3>Sensitivity (LTV/CAC swing per parameter)</h3><table><tr><th>Parameter</th><th>At low</th><th>At high</th><th>Swing</th></tr>" + "".join(
+                f"<tr><td>{_e(t['param'])}</td><td class='mono'>{t['at_low']}</td><td class='mono'>{t['at_high']}</td><td class='mono'>{t['swing']}</td></tr>" for t in sim["tornado"]) + "</table>")
+        for w in sim.get("warnings", []):
+            body.append(f"<p class='m'>⚠ {_e(w)}</p>")
 
     used = rep.get("sources") or []
     if used:

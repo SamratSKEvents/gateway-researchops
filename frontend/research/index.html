@@ -33,8 +33,10 @@
 </main>
 
 <section id="runView" class="run" hidden>
+  <button class="lograil" id="logShow" title="Show research log">›</button>
   <aside class="log">
     <div class="log-head">
+      <button class="loghide" id="logHide" title="Hide research log">‹</button>
       <div>
         <p class="eyebrow" id="runQuery"></p>
         <h2 id="runTitle">Researching…</h2>
@@ -59,10 +61,9 @@
         <option value="agents">Agents &amp; conversation</option><option value="court">Evidence court</option>
         <option value="autopsy">Red-team autopsy</option><option value="economics">Unit economics</option>
         <option value="actionplan">Action plan</option><option value="whatif">What-if lab</option><option value="planner">Planner</option><option value="replay">Replay</option>
-        <option value="memory">Research memory</option><option value="trial">Trial</option><option value="brief">Findings</option>
+        <option value="memory">Research memory</option><option value="trial">Trial</option><option value="brief">Evidence by hypothesis</option>
         <option value="claims">Claims &amp; debt</option><option value="sources">Sources</option>
       </select>
-      <button class="logtoggle" id="logToggle" title="Show or hide the research log">Log ◧</button>
     </nav>
     <div class="panel graph-panel" id="panel-graph"></div>
     <div class="panel" id="panel-verdict" hidden><div class="waiting" id="verdictWaiting">The verdict appears once the evidence has been weighed, argued and verified. Answer the questions above when asked; watch the log on the left.</div><div id="verdict"></div></div>
