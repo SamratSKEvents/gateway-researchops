@@ -47,7 +47,7 @@ async function openRun(id) {
   $("#verdict").innerHTML = ""; $("#trial").innerHTML = ""; $("#verdictWaiting").hidden = false; $("#hearing").hidden = true; $("#meter").hidden = true;
   ["claims", "sources"].forEach((x) => ($("#" + x).innerHTML = ""));
   const snap = await (await fetch(`/api/research/runs/${id}`)).json();
-  Graph.reset(snap.query); showTab("graph");
+  Graph.reset(snap.query); showTab(snap.status === "running" ? "graph" : "verdict");
   $("#runQuery").textContent = `Query: ${snap.query}`;
   $("#runTitle").textContent = "Researching…";
   $("#goalForm").hidden = snap.status !== "running";
@@ -66,6 +66,7 @@ async function openRun(id) {
 
 function onEvent(ev) {
   Graph.ev(ev);
+  typeof Views !== "undefined" && Views.step(ev);
   if (ev.stage === "await") {   // replayed history may contain answered questions: ask the server what is pending now
     if (ev.status === "waiting" && D === null) fetch(`/api/research/runs/${RUN}`).then((r) => r.json()).then((x) => x.pending ? showPending(x.pending) : ($("#hearing").hidden = true));
     else $("#hearing").hidden = true;
@@ -124,6 +125,7 @@ function bumpCounters(ev) {
 
 function finish(snap) {
   D = snap;
+  typeof Views !== "undefined" && Views.done(snap);
   Graph.enrich(snap);
   loadRecent();
   if (!D.result?.plan) { $("#brief").innerHTML = `<div class="waiting">Research did not complete. Inspect the failed step in the log.</div>`; $("#briefWaiting").hidden = true; return; }
@@ -135,8 +137,10 @@ function finish(snap) {
 // ---------------- tabs ----------------
 $("#tabs").onclick = (e) => e.target.dataset.tab && showTab(e.target.dataset.tab);
 function showTab(t) {
-  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll(".tabs button[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  const more = $("#moreTabs"); if (more) { more.value = [...more.options].some((o) => o.value === t) ? t : ""; more.classList.toggle("on", !!more.value); }
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "panel-" + t));
+  if (typeof Views !== "undefined" && Views[t]) Views[t]();      // lazy views fetch their data when opened
 }
 
 // ---------------- helpers ----------------
