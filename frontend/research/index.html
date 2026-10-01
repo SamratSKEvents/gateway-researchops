@@ -49,8 +49,9 @@
     <div id="hearing" class="hearing" hidden></div>
     <div class="stepper" id="stepper"></div>
     <nav class="tabs" id="tabs">
-      <button data-tab="verdict" class="on">Overview</button>
-      <button data-tab="graph">Graph</button>
+      <button data-tab="graph" class="on">Graph</button>
+      <button data-tab="verdict">Verdict</button>
+      <button data-tab="matrix">Matrix</button>
       <button data-tab="report">Report</button>
       <button data-tab="ask">Ask</button>
       <select id="moreTabs" class="more" aria-label="More views">
@@ -63,14 +64,15 @@
       </select>
       <button class="logtoggle" id="logToggle" title="Show or hide the research log">Log ◧</button>
     </nav>
-    <div class="panel graph-panel" id="panel-graph" hidden></div>
-    <div class="panel" id="panel-verdict"><div class="waiting" id="verdictWaiting">The verdict appears once the evidence has been weighed, argued and verified. Answer the questions above when asked; watch the log on the left.</div><div id="verdict"></div></div>
+    <div class="panel graph-panel" id="panel-graph"></div>
+    <div class="panel" id="panel-verdict" hidden><div class="waiting" id="verdictWaiting">The verdict appears once the evidence has been weighed, argued and verified. Answer the questions above when asked; watch the log on the left.</div><div id="verdict"></div></div>
     <div class="panel" id="panel-trial" hidden><div id="trial"></div></div>
     <div class="panel" id="panel-brief" hidden><div class="waiting" id="briefWaiting">The brief is written from the collected evidence once research completes. Watch the research log on the left; click any step to inspect what it found.</div><div id="brief"></div></div>
     <div class="panel" id="panel-claims" hidden><div id="claims"></div></div>
     <div class="panel" id="panel-sources" hidden><div id="sources"></div></div>
     <div class="panel" id="panel-report" hidden></div>
     <div class="panel" id="panel-ask" hidden></div>
+    <div class="panel" id="panel-matrix" hidden></div>
     <div class="panel" id="panel-agents" hidden></div>
     <div class="panel" id="panel-court" hidden></div>
     <div class="panel" id="panel-autopsy" hidden></div>

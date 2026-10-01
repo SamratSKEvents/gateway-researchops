@@ -80,12 +80,31 @@ const Views = (() => {
         ${overruled.map((h) => `<p><b>Court overruled:</b> ${esc(h.claim_text.slice(0, 140))} — ${esc(h.rationale)}</p>`).join("")}</section>` : ""}`;
   }
 
-  // ---------- report (PDF inside the app) ----------
+  // ---------- report: "Generate report" opens the PDF in a new closable in-app tab ----------
   function report() {
-    if (!D?.result?.report) return (P("report").innerHTML = empty("The report appears when research completes."));
-    P("report").innerHTML = `<div class="bar"><a class="btn" href="${API("/report.pdf")}" target="_blank">Open PDF</a>
-      <a class="btn ghost" href="${API("/deck.pptx")}">Download slide deck (.pptx)</a></div>
-      <iframe class="pdf" src="${API("/report.pdf")}#view=FitH" title="Decision report"></iframe>`;
+    if (!D?.result?.report) return (P("report").innerHTML = empty("The report can be generated once research completes."));
+    P("report").innerHTML = `<section class="card"><h3>Decision report</h3>
+      <p class="muted">A technical PDF built only from this run's records: verdict, hypotheses, challenged claims, court rulings, autopsy, matrix, unit economics, action plan and sources.</p>
+      <div class="bar"><button class="btn" id="genReport">Generate report</button><a class="btn ghost" href="${API("/deck.pptx")}">Download slide deck (.pptx)</a></div></section>`;
+    $("#genReport").onclick = () => openDocTab(`Report ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`, API(`/report.pdf?t=${Date.now()}`));
+  }
+  let docN = 0;
+  function openDocTab(title, url) {
+    const id = `doc${++docN}`;
+    const btn = document.createElement("button");
+    btn.dataset.tab = id; btn.className = "doctab"; btn.innerHTML = `📄 ${esc(title)} <span class="x" title="Close">✕</span>`;
+    $("#moreTabs").before(btn);
+    const panel = document.createElement("div");
+    panel.className = "panel"; panel.id = `panel-${id}`; panel.hidden = true;
+    panel.innerHTML = `<div class="bar"><span class="muted">Generating the PDF… (a few seconds)</span><a class="btn small ghost" href="${url}" target="_blank">Open in browser</a></div>
+      <iframe class="pdf" src="${url}#view=FitH" title="${esc(title)}"></iframe>`;
+    $(".stage").append(panel);
+    panel.querySelector("iframe").onload = () => (panel.querySelector(".muted").textContent = title);
+    btn.onclick = (e) => {
+      if (e.target.classList.contains("x")) { btn.remove(); panel.remove(); showTab("report"); return; }
+      showTab(id);
+    };
+    showTab(id);
   }
 
   // ---------- ask (follow-up, RAG) ----------
@@ -203,6 +222,21 @@ const Views = (() => {
       clearTimeout(tm); tm = setTimeout(async () => ($("#forkOut").innerHTML = diff(await post("/whatif/fork", { assumptions: vals }))), 200); }));
   }
 
+  // ---------- comparison matrix ----------
+  async function matrix() {
+    const { status, matrix: m } = await get("/matrix");
+    if (!m || !m.rows?.length) {
+      P("matrix").innerHTML = empty(status && status !== "done" ? `Matrix ${status}…` : "No comparison matrix yet.") + (status && status !== "done" ? "" : `<button class="btn" id="mxGo">Build matrix from the evidence</button>`);
+      const b = $("#mxGo"); if (b) b.onclick = async () => { b.textContent = "Reading the evidence…"; await post("/matrix"); matrix(); };
+      return;
+    }
+    P("matrix").innerHTML = `<div class="bar"><span class="muted">${m.rows.length} options × ${m.columns.length} attributes · ${pct(m.coverage)} of cells backed by a cited claim; blanks were not stated in the evidence.</span>
+      <button class="btn small ghost" id="mxRe">Rebuild</button></div>
+      <div class="mxwrap"><table class="mx"><tr><th></th>${m.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>
+      ${m.rows.map((r) => `<tr><th>${esc(r)}</th>${m.columns.map((c) => { const x = m.cells[r][c]; return x ? `<td>${esc(x.value)}<div>${cites(x.cites)}</div></td>` : `<td class="blank">—</td>`; }).join("")}</tr>`).join("")}</table></div>`;
+    $("#mxRe").onclick = async () => { $("#mxRe").textContent = "Rebuilding…"; await post("/matrix"); matrix(); };
+  }
+
   // ---------- action plan (plan generator) ----------
   async function actionplan() {
     const { status, plan } = await get("/action-plan");
@@ -256,5 +290,5 @@ const Views = (() => {
       <section class="card"><h3>Open questions</h3>${m.open_questions.slice(0, 12).map((q) => `<p>${chip(q.severity, sev(q.severity))} ${esc(q.question)}</p>`).join("")}</section>`;
   }
 
-  return { step, done, report, ask, actionplan, agents, court, autopsy, economics, whatif, planner, replay, memory };
+  return { step, done, report, ask, actionplan, matrix, agents, court, autopsy, economics, whatif, planner, replay, memory };
 })();

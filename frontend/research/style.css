@@ -384,3 +384,11 @@ ul.struck li { color: var(--ink3); text-decoration: line-through; text-decoratio
 .slider output { font: 12px var(--mono); text-align: right; } .task { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .dissent { border-color: var(--exp); }
 .tabs .more { flex: 0 0 auto; width: auto; }
+
+.mxwrap { overflow: auto; } table.mx { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.mx th, table.mx td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+table.mx tr:first-child th { background: var(--bg3); font: 600 12px var(--sans); } table.mx th:first-child { background: var(--bg3); }
+table.mx td.blank { color: var(--ink3); text-align: center; }
+
+.tabs .doctab { color: var(--accent); } .tabs .doctab .x { margin-left: 6px; color: var(--ink3); padding: 0 3px; border-radius: 4px; }
+.tabs .doctab .x:hover { background: var(--bg3); color: var(--warn); }

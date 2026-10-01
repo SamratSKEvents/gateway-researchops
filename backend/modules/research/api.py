@@ -285,3 +285,17 @@ async def redo_action_plan(rid: str):
     if rec is None:
         raise HTTPException(409, "run has no report yet")
     return rec
+
+
+@router.get("/runs/{rid}/matrix")
+def run_matrix(rid: str):
+    s = _snap(rid)
+    return {"status": (s["result"].get("background") or {}).get("matrix"), "matrix": s["result"].get("matrix")}
+
+
+@router.post("/runs/{rid}/matrix")
+async def redo_matrix(rid: str):
+    rec = await service.matrix_for(rid)
+    if rec is None:
+        raise HTTPException(404, "no such run")
+    return rec

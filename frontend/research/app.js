@@ -32,7 +32,9 @@ async function start(q) {
 
 window.addEventListener("hashchange", route);
 route();
+document.addEventListener("click", (e) => { const d = $(".recent"); if (d?.open && !d.contains(e.target)) d.open = false; });
 function route() {
+  const d = $(".recent"); if (d) d.open = false;
   const m = location.hash.match(/run=(\w+)/);
   if (!m) { document.body.classList.remove("is-running"); $("#landing").hidden = false; $("#runView").hidden = true; $("#topSearch").hidden = true; return; }
   const tab = (location.hash.match(/tab=(\w+)/) || [])[1];
@@ -47,7 +49,7 @@ async function openRun(id) {
   $("#verdict").innerHTML = ""; $("#trial").innerHTML = ""; $("#verdictWaiting").hidden = false; $("#hearing").hidden = true; $("#meter").hidden = true;
   ["claims", "sources"].forEach((x) => ($("#" + x).innerHTML = ""));
   const snap = await (await fetch(`/api/research/runs/${id}`)).json();
-  Graph.reset(snap.query); showTab(snap.status === "running" ? "graph" : "verdict");
+  Graph.reset(snap.query); showTab("graph");
   $("#runQuery").textContent = `Query: ${snap.query}`;
   $("#runTitle").textContent = "Researching…";
   $("#goalForm").hidden = snap.status !== "running";
@@ -140,6 +142,7 @@ function showTab(t) {
   document.querySelectorAll(".tabs button[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
   const more = $("#moreTabs"); if (more) { more.value = [...more.options].some((o) => o.value === t) ? t : ""; more.classList.toggle("on", !!more.value); }
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "panel-" + t));
+  if (t === "graph") requestAnimationFrame(() => Graph.refresh());   // cards must be measured while visible
   if (typeof Views !== "undefined" && Views[t]) Views[t]();      // lazy views fetch their data when opened
 }
 

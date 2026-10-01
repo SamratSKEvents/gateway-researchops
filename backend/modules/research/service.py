@@ -172,3 +172,13 @@ async def plan_for(run_id: str) -> dict | None:
     rec = await plan.generate(snap)
     _persist(run_id, "action_plan", None, rec)
     return rec
+
+
+async def matrix_for(run_id: str) -> dict | None:
+    from .. import matrix
+    snap = run_snapshot(run_id)
+    if not snap:
+        return None
+    rec = await matrix.build(snap)
+    _persist(run_id, "matrix", None, rec)
+    return rec

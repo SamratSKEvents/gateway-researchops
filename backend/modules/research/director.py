@@ -9,7 +9,7 @@ import asyncio
 from collections import Counter
 from .pipeline import Run
 from . import _llm as llm
-from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy, memory, economics, plan as PLAN
+from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy, memory, economics, plan as PLAN, matrix as MX
 
 MAX_ROUNDS = 2            # deep follow-up rounds after the broad one
 FOLLOWUP_BUDGET = 10      # pages read per follow-up round
@@ -103,7 +103,7 @@ class Director(Run):
     async def post_research(self):
         """Background work after results are shown. Independent stages run concurrently; the autopsy waits for the court."""
         bg = self.result.setdefault("background", {})
-        bg.update(entities="running", court="running", autopsy="queued", economics="running", action_plan="queued")
+        bg.update(entities="running", court="running", autopsy="queued", economics="running", action_plan="queued", matrix="running")
 
         async def entities():
             await self.stage("entities", "Extract named entities for research memory", self.extract_entities)
@@ -118,11 +118,15 @@ class Director(Run):
             await self.stage("action_plan", "Plan generator: phased roadmap with go/no-go gates", self.run_plan)
             bg["action_plan"] = "done"
 
+        async def mx():
+            await self.stage("matrix", "Comparison matrix from cited claims", self.run_matrix)
+            bg["matrix"] = "done"
+
         async def econ():
             await self.stage("economics", "Unit economics from the evidence + Monte Carlo", self.run_economics)
             bg["economics"] = "done"
 
-        await asyncio.gather(entities(), courts(), econ())
+        await asyncio.gather(entities(), courts(), econ(), mx())
         from ..ai_runtime import usage_of
         self.result["llm_usage"] = usage_of(self.id)
         self.save()
@@ -130,6 +134,11 @@ class Director(Run):
     async def extract_entities(self):
         self.result["entities"] = await memory.entities_for(self.snapshot())
         return f"{len(self.result['entities'])} entities: " + ", ".join(e["name"] for e in self.result["entities"][:8]), self.result["entities"]
+
+    async def run_matrix(self):
+        self.result["matrix"] = await MX.build(self.snapshot())
+        m = self.result["matrix"]
+        return f"{len(m['rows'])} options x {len(m['columns'])} attributes, {m['coverage']:.0%} of cells evidenced", m
 
     async def run_plan(self):
         self.result["action_plan"] = await PLAN.generate(self.snapshot())
@@ -281,13 +290,14 @@ class Director(Run):
             if "after_voi" not in g:
                 g2 = next((x for x in voi.rank_gaps(H, belief, 0) if x["hypothesis"] == g["hypothesis"]), None)
                 g["after_voi"], g["why_after"] = (g2["voi"], g2["why"]) if g2 else (0, "")
-        q = voi.question_for_user(H, A, E, self.asked)
+        q = None if getattr(self, "stop_asking", False) else voi.question_for_user(H, A, E, self.asked)
         if q:
             self.asked.add(q["assumption"])
             ans = await self.ask("assumption", {"title": "One question that changes the verdict", **q,
                                                 "hint": "Reply with a likelihood 0-100, or words like 'yes' / 'no' / 'unsure'."},
                                  USER_QUESTION_TIMEOUT)
             p = _to_prob(ans)
+            self.stop_asking = True          # one assumption question per run; "unsure" or no answer ends the questions
             if p is not None:
                 for a in A:
                     if a["id"] == q["assumption"]:

@@ -360,5 +360,7 @@ const Graph = (() => {
     new ResizeObserver(() => !userMoved && fit()).observe(host);
   }
 
-  return { mount, reset, ev, enrich, fit: () => { userMoved = false; fit(); } };
+  function refresh() { if (!nodes) return; nodes.forEach(render); layout(); }
+  if (document.fonts) document.fonts.ready.then(refresh);
+  return { mount, reset, ev, enrich, refresh, fit: () => { userMoved = false; fit(); } };
 })();

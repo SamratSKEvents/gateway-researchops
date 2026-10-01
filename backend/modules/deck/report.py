@@ -134,6 +134,14 @@ def build_html(snap: dict) -> str:
             f"<tr><td><span class='st {_cls(f['severity'])}'>{_e(f['severity'])}</span></td><td class='id'>{_e(f['auditor_name'])}</td>"
             f"<td><b>{_e(f['title'])}</b><div>{_e(f['description'])}</div></td><td>{_e(f['recommended_action'])}</td></tr>" for f in a.get("findings", [])) + "</table>")
 
+    mx = R.get("matrix") or {}
+    if mx.get("rows"):
+        body.append(sec("Comparison matrix", "cited cells only"))
+        body.append("<table><tr><th>Option</th>" + "".join(f"<th>{_e(c)}</th>" for c in mx["columns"]) + "</tr>" + "".join(
+            f"<tr><td><b>{_e(r)}</b></td>" + "".join(
+                (f"<td>{_e(mx['cells'][r][c]['value'])}{cite(mx['cells'][r][c]['cites'])}</td>" if c in mx["cells"][r] else "<td class='cite'>—</td>")
+                for c in mx["columns"]) + "</tr>" for r in mx["rows"]) + "</table>")
+
     ap = R.get("action_plan") or {}
     if ap.get("phases"):
         body.append(sec("Action plan", "phased roadmap"))
