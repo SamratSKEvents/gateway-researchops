@@ -351,7 +351,7 @@ ul.struck li { color: var(--ink3); text-decoration: line-through; text-decoratio
 .st-steps li.wait { background: var(--exp); border-color: var(--exp); }
 @keyframes dot { 50% { opacity: .65; } }
 /* roomier run screen */
-.run { grid-template-columns: minmax(280px, 24%) 1fr; } .run.nolog { grid-template-columns: 0 1fr; } .run.nolog .log { display: none; }
+.run { grid-template-columns: minmax(280px, 24%) 1fr; } .run.nolog { grid-template-columns: 1fr; } .run.nolog .log { display: none; }
 .tabs { align-items: center; } .tabs .more { background: none; border: 0; color: var(--ink3); padding: 10px 8px; font: inherit; cursor: pointer; }
 .tabs .more.on { color: var(--ink); } .logtoggle { margin-left: auto; background: none; border: 1px solid var(--line2) !important; color: var(--ink3); border-radius: 8px; padding: 5px 10px !important; }
 .panel { padding: 18px 22px; }

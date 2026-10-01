@@ -113,7 +113,8 @@ function addStep(ev) {
   s.el.querySelector("span").textContent = ev.title;
   s.el.querySelector("time").textContent = `${ev.t}s`;
   s.el.querySelector("p").textContent = ev.status === "running" ? "working…" : ev.summary;
-  s.el.scrollIntoView({ block: "nearest" });
+  const log = $(".log");                              // scroll the log only (scrollIntoView also scrolled the page)
+  if (log && D === null) log.scrollTop = s.el.offsetTop - log.clientHeight / 2;
 }
 
 const C = { searches: 0, results: 0, read: 0, failed: 0 };
