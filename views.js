@@ -1,6 +1,6 @@
 // Lazy views over the run API + progress stepper, theme and log toggles. Each view fetches its data when its tab opens.
 const Views = (() => {
-  const API = (p) => `/api/research/runs/${RUN}${p}`;
+  const API = (p) => /report\.pdf|deck\.pptx/.test(p) ? `demo/${RUN}/${p.split('?')[0].slice(1)}` : `/api/research/runs/${RUN}${p}`;
   const get = async (p) => (await fetch(API(p))).json();
   const post = async (p, body) => (await fetch(API(p), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) })).json();
   const P = (id) => $("#panel-" + id);

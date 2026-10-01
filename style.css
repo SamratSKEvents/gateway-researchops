@@ -433,4 +433,13 @@ table.v-mx tr.v-rowbad th, table.v-mx tr.v-rowbad td b { color: var(--warn); } t
 .v-gsum { text-align: center; color: var(--ink3); font: 11px var(--mono); display: flex; flex-direction: column; justify-content: center; }
 .v-gsum b { font-size: 15px; color: var(--ink); }
 
+/* native dropdowns: readable in both themes, and the "More" menu is an obvious control */
+:root { color-scheme: dark; } [data-theme="light"] { color-scheme: light; }
+select option, select optgroup { background: var(--bg2); color: var(--ink); }
+.tabs .more { appearance: none; -webkit-appearance: none; background: var(--bg2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b93a1'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid var(--line2) !important; border-radius: 999px; color: var(--ink); padding: 7px 32px 7px 14px !important; margin-left: 8px; font: 500 13px var(--sans); cursor: pointer; }
+.tabs .more:hover, .tabs .more:focus-visible { border-color: var(--accent) !important; outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.tabs .more.on { background-color: color-mix(in srgb, var(--accent) 16%, var(--bg2)); border-color: var(--accent) !important; color: var(--ink); font-weight: 600; }
+.v-toolbar select, .v-card select, .constraints select { color: var(--ink); background-color: var(--bg2); }
+
 .demo-banner { background: var(--accent); color: #111; font: 600 12px var(--sans); text-align: center; padding: 6px 12px; }
