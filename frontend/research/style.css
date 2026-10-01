@@ -350,3 +350,10 @@ body.is-running .top::after { content: ""; position: absolute; left: 0; right: 0
 .kgc.kgc-q { background: #f2f6ff !important; }
 .kgc-g-bg { stroke: var(--bg3) !important; } .kgc svg text { fill: var(--ink); }
 @media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition: none !important; } }
+
+.constraints { display: grid; grid-template-columns: repeat(3, 1fr) 140px; gap: 8px; margin-top: 10px; }
+.constraints input, .constraints select { font: 14px var(--sans); padding: 10px 12px; background: var(--bg2); border: 1px solid var(--line2);
+  border-radius: 10px; color: var(--ink); box-shadow: var(--shadow); min-width: 0; }
+.constraints input:focus, .constraints select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.landing { padding-top: 22vh; }
+@media (max-width: 720px) { .constraints { grid-template-columns: 1fr 1fr; } }

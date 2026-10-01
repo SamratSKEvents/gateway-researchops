@@ -23,7 +23,9 @@ Graph.mount($("#panel-graph"));
 
 async function start(q) {
   q = (q || "").trim(); if (!q) return;
-  const r = await fetch("/api/research", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+  const v = (id) => ($(id)?.value || "").trim() || null;    // optional constraints; the interview skips what is given here
+  const body = { query: q, geography: v("#cGeo"), scope: v("#cScope"), time_range: v("#cTime"), depth: v("#cDepth") };
+  const r = await fetch("/api/research", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const { id } = await r.json();
   location.hash = `run=${id}`;
 }
