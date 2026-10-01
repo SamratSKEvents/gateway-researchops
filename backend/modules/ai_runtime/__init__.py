@@ -13,4 +13,4 @@ Configure with env vars (OpenAI-compatible endpoint):
     LLM_API_KEY   default ""  (set for Groq etc.)
     EMBED_MODEL   default nomic-embed-text
 """
-from .runtime import chat, chat_json, embed, recent_calls, info  # noqa: F401
+from .runtime import chat, chat_json, embed, recent_calls, info, usage_of, RUN  # noqa: F401

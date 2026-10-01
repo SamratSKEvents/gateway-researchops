@@ -59,7 +59,8 @@ class Director(Run):
 
     # ---------- orchestration ----------
     async def execute(self):
-        from ..ai_runtime import info as ai_info
+        from ..ai_runtime import info as ai_info, RUN
+        RUN.set(self.id)        # every LLM call of this run (and its background tasks) is accounted to it
         self.result["ai"] = {**ai_info(), "note": "model used for every LLM step in this run"}
         try:
             await self.stage("interview", "Goal interview", self.interview, required=True)
@@ -82,6 +83,8 @@ class Director(Run):
         except Exception as e:
             self.status = "failed"
             self.emit("complete", "Research stopped", "failed", str(e))
+        from ..ai_runtime import usage_of
+        self.result["llm_usage"] = usage_of(self.id)
         self.save()
         if self.status == "done":      # results are already shown; court and autopsy keep working in the background
             self._bg = asyncio.create_task(self.post_research())
@@ -110,6 +113,8 @@ class Director(Run):
         bg["autopsy"] = "running"
         await self.stage("autopsy", "Research autopsy: red-team audit of the finished research", self.run_autopsy)
         bg["autopsy"] = "done"
+        from ..ai_runtime import usage_of
+        self.result["llm_usage"] = usage_of(self.id)
         self.save()
 
     async def extract_entities(self):
