@@ -12,6 +12,7 @@ dependencies = [
     "transformers",
     "sentencepiece",
     "protobuf",
+    "python-pptx",
 ]
 
 [tool.uv.sources]

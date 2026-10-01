@@ -129,3 +129,20 @@ async def memory_state(question: str = "", backfill: int = 3) -> dict:
         except Exception:
             pass
     return await memory.state(snaps, question)
+
+
+async def economics_for(run_id: str) -> dict | None:
+    from .. import economics
+    snap = run_snapshot(run_id)
+    if not snap:
+        return None
+    ex = await economics.extract(snap)
+    rec = {**ex, "simulation": economics.simulate(ex["params"]) if ex["applicable"] else {"error": "not a customer-facing business decision"}}
+    _persist(run_id, "economics", None, rec)
+    return rec
+
+
+def economics_simulate(run_id: str, overrides: dict, trials: int = 2000) -> dict | None:
+    from .. import economics
+    ec = ((run_snapshot(run_id) or {}).get("result") or {}).get("economics")
+    return economics.simulate(ec["params"], overrides, trials) if ec else None

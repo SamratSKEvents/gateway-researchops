@@ -10,15 +10,18 @@ from ..ledger import cite_id
 
 MAX_CANDIDATES, SIDE = 160, 4
 SCHEMA = {"type": "object", "required": ["turns", "ruling", "rationale"], "properties": {
-    "turns": {"type": "array", "minItems": 5, "maxItems": 9, "items": {"type": "object", "required": ["role", "statement", "cites"], "properties": {
-        "role": {"enum": ["JUDGE", "CLERK", "PROSECUTION", "DEFENSE"]}, "statement": {"type": "string", "maxLength": 420},
-        "cites": {"type": "array", "maxItems": 3, "items": {"type": "string"}}}}},
+    "turns": {"type": "array", "minItems": 5, "maxItems": 9, "items": {"type": "object", "required": ["role", "thesis", "points"], "properties": {
+        "role": {"enum": ["JUDGE", "CLERK", "PROSECUTION", "DEFENSE"]}, "thesis": {"type": "string", "maxLength": 200},
+        "points": {"type": "array", "maxItems": 3, "items": {"type": "object", "required": ["label", "text", "cites"], "properties": {
+            "label": {"type": "string", "maxLength": 40}, "text": {"type": "string", "maxLength": 220},
+            "cites": {"type": "array", "maxItems": 3, "items": {"type": "string"}}}}}}}},
     "ruling": {"enum": ["AFFIRMED", "QUALIFIED", "OVERRULED"]}, "rationale": {"type": "string", "maxLength": 300}}}
 SYSTEM = ("You run an evidence court over ONE business claim. Order: JUDGE opens; CLERK reads the claim and lists the exhibits; "
           "PROSECUTION attacks the claim; DEFENSE answers; they exchange 2-3 rounds; JUDGE rules. Rules: only the listed exhibits "
           "count as evidence, cite their ids on every factual point, no outside knowledge, no invented numbers. Ruling: AFFIRMED "
           "if the exhibits establish the claim, QUALIFIED if they support it only in part or with conditions, OVERRULED if they "
-          "contradict it or fail to support it.")
+          "contradict it or fail to support it. Format every turn for speech: a one-sentence thesis, then 2-3 short points, each "
+          "with a 2-4 word bold-style label (e.g. 'Core risk', 'Price evidence') and the exhibit ids it rests on. No long paragraphs.")
 
 
 async def _exhibits(claim, others, challenge, judge, embed=None):
@@ -56,9 +59,15 @@ async def hold(claim_id: str, snap: dict, judge=nli.judge, llm=chat_json, embed=
     j = await llm("court.hearing", SYSTEM, ctx, SCHEMA, 1800)
     turns = []
     for i, t in enumerate((j or {}).get("turns", [])):
-        cites = [cite_id(c) for c in t.get("cites", [])]
-        turns.append({"step": i + 1, "role": t.get("role", "JUDGE"), "statement": str(t.get("statement", "")).strip(),
-                      "cites": [c for c in cites if c in ids], "invalid_cites": [c for c in cites if c not in ids]})
+        pts, all_cites, bad = [], [], []
+        for p in t.get("points", []):
+            cs = [cite_id(c) for c in p.get("cites", [])]
+            pts.append({"label": str(p.get("label", "")).strip(), "text": str(p.get("text", "")).strip(), "cites": [c for c in cs if c in ids]})
+            all_cites += [c for c in cs if c in ids and c not in all_cites]; bad += [c for c in cs if c not in ids]
+        thesis = str(t.get("thesis", t.get("statement", ""))).strip()
+        statement = thesis + "".join(f"\n• {p['label']}: {p['text']}" for p in pts)      # narration-ready text
+        turns.append({"step": i + 1, "role": t.get("role", "JUDGE"), "thesis": thesis, "points": pts, "statement": statement,
+                      "cites": all_cites, "invalid_cites": bad})
     stmts = [{"id": f"turn{t['step']}", "text": t["statement"], "cites": t["cites"]} for t in turns if t["cites"]]
     rulings = await trial.verify(stmts, {e["id"]: e["text"] for e in ex}) if stmts else {}
     for t in turns:

@@ -9,7 +9,7 @@ import asyncio
 from collections import Counter
 from .pipeline import Run
 from . import _llm as llm
-from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy, memory
+from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy, memory, economics
 
 MAX_ROUNDS = 2            # deep follow-up rounds after the broad one
 FOLLOWUP_BUDGET = 10      # pages read per follow-up round
@@ -112,7 +112,9 @@ class Director(Run):
         bg["court"] = "done"
         bg["autopsy"] = "running"
         await self.stage("autopsy", "Research autopsy: red-team audit of the finished research", self.run_autopsy)
-        bg["autopsy"] = "done"
+        bg["autopsy"], bg["economics"] = "done", "running"
+        await self.stage("economics", "Unit economics from the evidence + Monte Carlo", self.run_economics)
+        bg["economics"] = "done"
         from ..ai_runtime import usage_of
         self.result["llm_usage"] = usage_of(self.id)
         self.save()
@@ -120,6 +122,15 @@ class Director(Run):
     async def extract_entities(self):
         self.result["entities"] = await memory.entities_for(self.snapshot())
         return f"{len(self.result['entities'])} entities: " + ", ".join(e["name"] for e in self.result["entities"][:8]), self.result["entities"]
+
+    async def run_economics(self):
+        ex = await economics.extract(self.snapshot())
+        sim = economics.simulate(ex["params"]) if ex["applicable"] else {"error": "not a customer-facing business decision"}
+        self.result["economics"] = {**ex, "simulation": sim}
+        if "error" in sim:
+            return sim["error"], self.result["economics"]
+        return (f"LTV/CAC {sim['base']['ltv_cac']}, payback {sim['base']['payback_months']} months; P(LTV/CAC>3) "
+                f"{sim['probabilities']['ltv_cac_above_3']:.0%}; {len(sim['assumed'])} assumed parameter(s)"), self.result["economics"]
 
     async def hold_court(self, cid):
         rec = await court.hold(cid, self.snapshot())

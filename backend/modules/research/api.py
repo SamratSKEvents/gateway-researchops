@@ -210,3 +210,42 @@ async def whatif_ask(rid: str, req: AskReq):
     if out is None:
         raise HTTPException(404, "no belief state for this run")
     return out
+
+
+class SimReq(BaseModel):
+    overrides: dict[str, float] = {}     # pin parameters, e.g. {"price": 1299, "churn": 0.08}
+    trials: int = 2000
+
+
+@router.get("/runs/{rid}/economics")
+def run_economics(rid: str):
+    s = _snap(rid)
+    return {"status": (s["result"].get("background") or {}).get("economics"), "economics": s["result"].get("economics")}
+
+
+@router.post("/runs/{rid}/economics")
+async def redo_economics(rid: str):
+    rec = await service.economics_for(rid)
+    if rec is None:
+        raise HTTPException(404, "no such run")
+    return rec
+
+
+@router.post("/runs/{rid}/economics/simulate")
+def simulate_economics(rid: str, req: SimReq):
+    out = service.economics_simulate(rid, req.overrides, min(max(req.trials, 100), 20000))
+    if out is None:
+        raise HTTPException(409, "no economics model for this run yet (POST /economics first)")
+    return out
+
+
+@router.get("/runs/{rid}/deck.pptx")
+def run_deck(rid: str):
+    """Executive slide deck built from this run's records."""
+    from fastapi.responses import StreamingResponse
+    from ..deck import build
+    s = _snap(rid)
+    if not s["result"].get("report"):
+        raise HTTPException(409, "run has no report yet")
+    return StreamingResponse(build(s), media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                             headers={"Content-Disposition": f'attachment; filename="researchops_{rid}.pptx"'})

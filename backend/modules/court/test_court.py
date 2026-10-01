@@ -15,9 +15,9 @@ def test_hearing_uses_entailment_exhibits_and_drops_invalid_cites():
         return [{"entail": 0.9 if "1,499" in p else 0.0, "neutral": 0, "contradict": 0.8 if "3,000" in p else 0.0} for p, _ in pairs]
 
     async def llm(task, system, user, schema, mt):
-        return {"turns": [{"role": "JUDGE", "statement": "Court opens.", "cites": []},
-                          {"role": "PROSECUTION", "statement": "A source says 3,000.", "cites": ["c3", "c99"]},
-                          {"role": "DEFENSE", "statement": "Another source confirms 1,499.", "cites": ["[c2]"]}],
+        return {"turns": [{"role": "JUDGE", "thesis": "Court opens.", "points": []},
+                          {"role": "PROSECUTION", "thesis": "The price is wrong.", "points": [{"label": "Price evidence", "text": "A source says 3,000.", "cites": ["c3", "c99"]}]},
+                          {"role": "DEFENSE", "thesis": "It holds.", "points": [{"label": "Confirmation", "text": "Another source confirms 1,499.", "cites": ["[c2]"]}]}],
                 "ruling": "QUALIFIED", "rationale": "Sources disagree."}
 
     async def verify(stmts, claims):
@@ -29,4 +29,4 @@ def test_hearing_uses_entailment_exhibits_and_drops_invalid_cites():
     assert rel == {"c1": "claim under trial", "c2": "supports", "c3": "contradicts"}
     assert r["turns"][1]["cites"] == ["c3"] and r["turns"][1]["invalid_cites"] == ["c99"]
     assert r["turns"][2]["cites"] == ["c2"] and r["turns"][2]["verification"]["ruling"] == "supported"
-    assert r["ruling"] == "QUALIFIED"
+    assert r["ruling"] == "QUALIFIED" and "• Price evidence: A source says 3,000." in r["turns"][1]["statement"]
