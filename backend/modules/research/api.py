@@ -271,3 +271,17 @@ async def run_report_pdf(rid: str):
     if not s["result"].get("report"):
         raise HTTPException(409, "run has no report yet")
     return Response(await build_pdf(s), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="report_{rid}.pdf"'})
+
+
+@router.get("/runs/{rid}/action-plan")
+def run_action_plan(rid: str):
+    s = _snap(rid)
+    return {"status": (s["result"].get("background") or {}).get("action_plan"), "plan": s["result"].get("action_plan")}
+
+
+@router.post("/runs/{rid}/action-plan")
+async def redo_action_plan(rid: str):
+    rec = await service.plan_for(rid)
+    if rec is None:
+        raise HTTPException(409, "run has no report yet")
+    return rec

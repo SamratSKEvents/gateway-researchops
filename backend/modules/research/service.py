@@ -162,3 +162,13 @@ async def ask_followup(run_id: str, question: str) -> dict:
     else:
         _persist(run_id, "followups", None, hist)
     return rec
+
+
+async def plan_for(run_id: str) -> dict | None:
+    from .. import plan
+    snap = run_snapshot(run_id)
+    if not snap or not snap.get("result", {}).get("report"):
+        return None
+    rec = await plan.generate(snap)
+    _persist(run_id, "action_plan", None, rec)
+    return rec

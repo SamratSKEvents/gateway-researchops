@@ -203,6 +203,20 @@ const Views = (() => {
       clearTimeout(tm); tm = setTimeout(async () => ($("#forkOut").innerHTML = diff(await post("/whatif/fork", { assumptions: vals }))), 200); }));
   }
 
+  // ---------- action plan (plan generator) ----------
+  async function actionplan() {
+    const { status, plan } = await get("/action-plan");
+    if (!plan) {
+      P("actionplan").innerHTML = empty(status ? `Action plan ${status}…` : "No action plan yet.") + (status ? "" : `<button class="btn" id="apGo">Generate plan</button>`);
+      const b = $("#apGo"); if (b) b.onclick = async () => { b.textContent = "Planning…"; await post("/action-plan"); actionplan(); };
+      return;
+    }
+    P("actionplan").innerHTML = (plan.first_step ? `<section class="card dissent"><h3>First step</h3><p>${esc(plan.first_step)}</p></section>` : "")
+      + plan.phases.map((p, i) => `<section class="card"><h3>${chip(`Phase ${i + 1}`)} ${esc(p.name)} <span class="muted">${esc(p.horizon)}</span></h3>
+        ${p.actions.map((a) => `<p>• ${esc(a)}</p>`).join("")}<p><b>Go / no-go gate:</b> ${esc(p.gate)}</p>
+        ${p.risks_addressed.length ? `<p class="muted">Retires: ${p.risks_addressed.map(esc).join(" · ")}</p>` : ""}<p>${cites(p.cites)}</p></section>`).join("");
+  }
+
   // ---------- planner ----------
   async function planner() {
     const p = await get("/planner");
@@ -242,5 +256,5 @@ const Views = (() => {
       <section class="card"><h3>Open questions</h3>${m.open_questions.slice(0, 12).map((q) => `<p>${chip(q.severity, sev(q.severity))} ${esc(q.question)}</p>`).join("")}</section>`;
   }
 
-  return { step, done, report, ask, agents, court, autopsy, economics, whatif, planner, replay, memory };
+  return { step, done, report, ask, actionplan, agents, court, autopsy, economics, whatif, planner, replay, memory };
 })();

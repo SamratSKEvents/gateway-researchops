@@ -9,7 +9,7 @@ import asyncio
 from collections import Counter
 from .pipeline import Run
 from . import _llm as llm
-from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy, memory, economics
+from .. import goals, ledger as L, belief as B, voi, trial, report, challenge as CH, classify, court, autopsy, memory, economics, plan as PLAN
 
 MAX_ROUNDS = 2            # deep follow-up rounds after the broad one
 FOLLOWUP_BUDGET = 10      # pages read per follow-up round
@@ -103,7 +103,7 @@ class Director(Run):
     async def post_research(self):
         """Background work after results are shown. Independent stages run concurrently; the autopsy waits for the court."""
         bg = self.result.setdefault("background", {})
-        bg.update(entities="running", court="running", autopsy="queued", economics="running")
+        bg.update(entities="running", court="running", autopsy="queued", economics="running", action_plan="queued")
 
         async def entities():
             await self.stage("entities", "Extract named entities for research memory", self.extract_entities)
@@ -114,7 +114,9 @@ class Director(Run):
                                    for c in self.court_targets()))
             bg["court"], bg["autopsy"] = "done", "running"
             await self.stage("autopsy", "Research autopsy: red-team audit of the finished research", self.run_autopsy)
-            bg["autopsy"] = "done"
+            bg["autopsy"], bg["action_plan"] = "done", "running"
+            await self.stage("action_plan", "Plan generator: phased roadmap with go/no-go gates", self.run_plan)
+            bg["action_plan"] = "done"
 
         async def econ():
             await self.stage("economics", "Unit economics from the evidence + Monte Carlo", self.run_economics)
@@ -128,6 +130,11 @@ class Director(Run):
     async def extract_entities(self):
         self.result["entities"] = await memory.entities_for(self.snapshot())
         return f"{len(self.result['entities'])} entities: " + ", ".join(e["name"] for e in self.result["entities"][:8]), self.result["entities"]
+
+    async def run_plan(self):
+        self.result["action_plan"] = await PLAN.generate(self.snapshot())
+        ph = self.result["action_plan"]["phases"]
+        return f"{len(ph)} phases: " + " -> ".join(p["name"] for p in ph), self.result["action_plan"]
 
     async def run_economics(self):
         ex = await economics.extract(self.snapshot())

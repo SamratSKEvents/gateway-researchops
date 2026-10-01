@@ -134,6 +134,15 @@ def build_html(snap: dict) -> str:
             f"<tr><td><span class='st {_cls(f['severity'])}'>{_e(f['severity'])}</span></td><td class='id'>{_e(f['auditor_name'])}</td>"
             f"<td><b>{_e(f['title'])}</b><div>{_e(f['description'])}</div></td><td>{_e(f['recommended_action'])}</td></tr>" for f in a.get("findings", [])) + "</table>")
 
+    ap = R.get("action_plan") or {}
+    if ap.get("phases"):
+        body.append(sec("Action plan", "phased roadmap"))
+        if ap.get("first_step"):
+            body.append(f"<div class='stamp m'>FIRST STEP<small>{_e(ap['first_step'])}</small></div>")
+        body.append("<table style='margin-top:3mm'><tr><th>Phase</th><th>Actions</th><th>Go / no-go gate</th><th>Risks retired</th></tr>" + "".join(
+            f"<tr><td><b>{_e(p['name'])}</b><div class='cite'>{_e(p['horizon'])}</div></td><td>{'<br>'.join('• ' + _e(a) for a in p['actions'])}{cite(p['cites'])}</td>"
+            f"<td>{_e(p['gate'])}</td><td>{'<br>'.join(_e(r) for r in p['risks_addressed'])}</td></tr>" for p in ap["phases"]) + "</table>")
+
     ec = R.get("economics") or {}
     sim = ec.get("simulation") or {}
     if sim.get("base"):
