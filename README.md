@@ -1,6 +1,8 @@
 # ResearchOps
 ### The autonomous research agent that puts its own findings on trial.
 
+**▶ Live demo (recorded runs, no setup):** https://samratskevents.github.io/gateway-researchops/
+
 > Ask a business question. ResearchOps interviews you about what you are actually trying to decide, breaks the question into research tasks, reads the web in parallel, argues both sides in an evidence court, red-teams its own conclusion, and hands you a **verdict with odds**, the **facts that could flip it**, and a **verbatim source quote behind every sentence**.
 
 ---
