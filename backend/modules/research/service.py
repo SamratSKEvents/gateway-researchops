@@ -18,7 +18,14 @@ def run_snapshot(run_id: str) -> dict | None:
     if run_id in live:
         return live[run_id].snapshot()
     f = RUNS / f"{run_id}.json"
-    return json.loads(f.read_text(encoding="utf8")) if run_id.isalnum() and f.exists() else None
+    if not (run_id.isalnum() and f.exists()):
+        return None
+    j = json.loads(f.read_text(encoding="utf8"))
+    bg = j.get("result", {}).get("background") or {}
+    for k, v in bg.items():          # not live any more: background work that never finished was interrupted (server restart)
+        if v in ("running", "queued"):
+            bg[k] = "interrupted"
+    return j
 
 
 def list_runs(limit=40):

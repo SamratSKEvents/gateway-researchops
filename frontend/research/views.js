@@ -31,8 +31,8 @@ const Views = (() => {
     if (st === "await") S.waiting = ev.status === "waiting" ? (ev.data?.question || ev.title) : null;
     const idx = STEPS.findIndex(([, ks]) => ks.includes(st));
     if (idx >= 0) {
-      if (ev.status === "running") { S.cur = idx; S.waiting = null; for (let i = 0; i < idx; i++) S.state[i] = S.state[i] || "done"; S.state[idx] = "now"; }
-      if (ev.status === "done" && S.state[idx] !== "now") S.state[idx] = "done";
+      if (ev.status === "running") { S.cur = Math.max(S.cur ?? 0, idx); S.waiting = null; for (let i = 0; i < idx; i++) S.state[i] = "done"; if (S.state[idx] !== "done") S.state[idx] = "now"; }
+      if (ev.status === "done" || ev.status === "failed") { for (let i = 0; i < idx; i++) S.state[i] = "done"; if (idx < 8 || S.state[8] !== "done") S.state[idx] = idx === S.cur && idx === 8 ? "now" : "done"; }
       if (ev.status === "failed" && ["interview", "hypotheses", "plan"].includes(st)) S.failed = true;
     }
     if (st === "complete") { for (let i = 0; i < 8; i++) S.state[i] = "done"; S.cur = 8; S.state[8] = S.state[8] || "now"; }
@@ -51,11 +51,12 @@ const Views = (() => {
   function done(snap) {
     clearInterval(poll);
     const bg = snap.result?.background || {};
-    if (Object.values(bg).some((v) => v !== "done")) {
+    const fin = (v) => v === "done" || v === "interrupted";
+    if (Object.values(bg).some((v) => !fin(v))) {
       poll = setInterval(async () => {
         const s = await (await fetch(`/api/research/runs/${RUN}`)).json();
         s.events.slice(S.seen || snap.events.length).forEach(step); S.seen = s.events.length;
-        if (Object.values(s.result?.background || {}).every((v) => v === "done")) { clearInterval(poll); S.state[8] = "done"; drawSteps(); D = s; overviewExtras(s); }
+        if (Object.values(s.result?.background || {}).every(fin)) { clearInterval(poll); S.state[8] = "done"; drawSteps(); D = s; overviewExtras(s); }
       }, 4000);
     } else { S.state[8] = "done"; drawSteps(); }
     overviewExtras(snap);
