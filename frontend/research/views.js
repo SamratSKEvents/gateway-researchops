@@ -31,11 +31,11 @@ const Views = (() => {
     if (st === "await") S.waiting = ev.status === "waiting" ? (ev.data?.question || ev.title) : null;
     const idx = STEPS.findIndex(([, ks]) => ks.includes(st));
     if (idx >= 0) {
-      if (ev.status === "running") { S.cur = idx; S.waiting = null; for (let i = 0; i < idx; i++) S.state[i] = S.state[i] || "done"; S.state[idx] = "run"; }
-      if (ev.status === "done" && S.state[idx] !== "run") S.state[idx] = "done";
+      if (ev.status === "running") { S.cur = idx; S.waiting = null; for (let i = 0; i < idx; i++) S.state[i] = S.state[i] || "done"; S.state[idx] = "now"; }
+      if (ev.status === "done" && S.state[idx] !== "now") S.state[idx] = "done";
       if (ev.status === "failed" && ["interview", "hypotheses", "plan"].includes(st)) S.failed = true;
     }
-    if (st === "complete") { for (let i = 0; i < 8; i++) S.state[i] = "done"; S.cur = 8; S.state[8] = S.state[8] || "run"; }
+    if (st === "complete") { for (let i = 0; i < 8; i++) S.state[i] = "done"; S.cur = 8; S.state[8] = S.state[8] || "now"; }
     drawSteps();
   }
   function drawSteps() {
