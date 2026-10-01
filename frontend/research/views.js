@@ -221,7 +221,7 @@ const Views = (() => {
       <div class="v-mc">${histo("LTV / CAC across " + s.trials + " simulated futures", s.histogram?.ltv_cac, 3, "target 3×")}
       ${histo("Payback period (months)", s.histogram?.payback_months, 12, "12 months")}</div>
       <p class="v-muted">Monte Carlo: every parameter is drawn from its low–likely–high range ${s.trials} times. LTV/CAC p10–p90: ${s.distribution.ltv_cac ? `${s.distribution.ltv_cac.p10} – ${s.distribution.ltv_cac.p90}` : "—"}. Assumed (no evidence): ${s.assumed.join(", ") || "none"}.</p>`);
-    show(ec.simulation);
+    show(ec.simulation); post("/economics/simulate", { overrides: {} }).then((x) => !x.error && show(x));   // always show the latest model (scenarios, tail risk)
     let tm, pinned = {};
     P("economics").querySelectorAll("input[type=range]").forEach((r) => (r.oninput = () => {
       r.nextElementSibling.textContent = (+r.value).toFixed(r.dataset.k === "churn" ? 3 : 0); pinned[r.dataset.k] = +r.value;
