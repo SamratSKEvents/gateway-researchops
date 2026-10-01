@@ -92,6 +92,9 @@ class Run:
         self.queries = [{"id": f"t{i + 1}", **t} for i, t in enumerate(tasks)]
         self.subject = subject
         self.key_norms = sorted({X.norm(k) for k in [subject, *keywords] if len(X.norm(k)) >= 3})
+        # a keyword matches when ALL its distinctive words occur (any order): "cloud kitchen market India" must match
+        # "India cloud kitchen market report"; short names ("Yulu") still match as a single word
+        self.key_tokens = [t for t in ({w for w in k.split() if len(w) >= 4} or {k} for k in self.key_norms) if t]
         self.result["plan"] = {"subject": subject, "keywords": keywords, "tasks": self.queries, "how": how}
         return f"{len(self.queries)} research tasks ({how})", self.result["plan"]
 
@@ -149,7 +152,11 @@ class Run:
 
     def _relevant(self, text):
         n = X.norm(text)
-        return not self.key_norms or any(k in n for k in self.key_norms)
+        if not self.key_norms:
+            return True
+        words = set(n.split())
+        return any(k in n for k in self.key_norms) or any(len(t & words) >= max(1, -(-2 * len(t) // 3))   # >= 2/3 of the words
+                                                           for t in getattr(self, "key_tokens", []))
 
     async def select(self, budget=MAX_SOURCES):
         """Pick pages to read from this round's results; pages already known from earlier rounds are skipped."""

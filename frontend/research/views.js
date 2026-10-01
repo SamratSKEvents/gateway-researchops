@@ -71,7 +71,12 @@ const Views = (() => {
     const overruled = Object.values(R.court || {}).filter((h) => h.ruling === "OVERRULED");
     let box = $("#overviewExtras");
     if (!box) { box = document.createElement("div"); box.id = "overviewExtras"; $("#panel-verdict").append(box); }
-    box.innerHTML = `<section class="card"><h3>Research debt register <span class="badge ${debt > 10 ? "bad" : debt > 4 ? "mid" : "good"}">${debt}</span></h3>
+    const sim = R.economics?.simulation;
+    const mcCard = sim?.base ? `<section class="card"><h3>Monte Carlo unit economics <span class="badge ${sim.probabilities.ltv_cac_above_3 >= 0.6 ? "good" : sim.probabilities.ltv_cac_above_3 >= 0.3 ? "mid" : "bad"}">${pct(sim.probabilities.ltv_cac_above_3)} chance LTV/CAC &gt; 3</span></h3>
+      <div class="kv"><div><b>${sim.base.ltv_cac ?? "—"}</b>LTV/CAC (likely)</div><div><b>${sim.base.payback_months ?? "—"}</b>payback months</div>
+      <div><b>${pct(sim.probabilities.margin_positive)}</b>P(margin &gt; 0)</div><div><b>${pct(sim.probabilities.payback_under_12m)}</b>P(payback &lt; 12m)</div></div>
+      <p class="muted">${sim.trials} simulated futures over the parameter ranges; ${sim.assumed.length} of ${Object.keys(R.economics.params).length} parameters are assumptions (no evidence). Open More → Unit economics to test values.</p></section>` : "";
+    box.innerHTML = mcCard + `<section class="card"><h3>Research debt register <span class="badge ${debt > 10 ? "bad" : debt > 4 ? "mid" : "good"}">${debt}</span></h3>
       <div class="kv"><div><b>${weak}</b>contradicted / outdated</div><div><b>${unver}</b>unverified</div><div><b>${partial}</b>partially supported</div>
       <div><b>${v.struck || 0}</b>struck statements</div><div><b>${crit}</b>critical / high audit findings</div></div>
       <p class="muted">${debt === 0 ? "No outstanding epistemic debt." : `Before acting on this, resolve the ${weak + unver} weak or unverified claim(s) the verdict leans on; see Claims & debt and the autopsy follow-up queue.`}</p></section>
@@ -82,10 +87,12 @@ const Views = (() => {
 
   // ---------- report: "Generate report" opens the PDF in a new closable in-app tab ----------
   function report() {
-    if (!D?.result?.report) return (P("report").innerHTML = empty("The report can be generated once research completes."));
-    P("report").innerHTML = `<section class="card"><h3>Decision report</h3>
-      <p class="muted">A technical PDF built only from this run's records: verdict, hypotheses, challenged claims, court rulings, autopsy, matrix, unit economics, action plan and sources.</p>
-      <div class="bar"><button class="btn" id="genReport">Generate report</button><a class="btn ghost" href="${API("/deck.pptx")}">Download slide deck (.pptx)</a></div></section>`;
+    if (!D?.result?.report) return (P("report").innerHTML = empty("The report appears once research completes."));
+    const url = API(`/report.pdf?t=${Date.now()}`);
+    P("report").innerHTML = `<div class="bar"><b>Decision report</b><span class="muted">technical PDF built only from this run's records</span>
+      <button class="btn small" id="genReport">Open in new tab ↗</button><a class="btn small ghost" href="${url}" target="_blank">Download PDF</a>
+      <a class="btn small ghost" href="${API("/deck.pptx")}">Slide deck (.pptx)</a></div>
+      <iframe class="pdf" src="${url}#view=FitH" title="Decision report"></iframe>`;
     $("#genReport").onclick = () => openDocTab(`Report ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`, API(`/report.pdf?t=${Date.now()}`));
   }
   let docN = 0;
@@ -198,13 +205,26 @@ const Views = (() => {
     const show = (s) => ($("#simOut").innerHTML = s.error ? empty(s.error) : `<div class="kv"><div><b>${s.base.margin}</b>margin</div><div><b>${s.base.ltv_cac ?? "—"}</b>LTV/CAC</div>
       <div><b>${s.base.payback_months ?? "—"}</b>payback (months)</div><div><b>${pct(s.probabilities.ltv_cac_above_3)}</b>P(LTV/CAC>3)</div>
       <div><b>${pct(s.probabilities.margin_positive)}</b>P(margin>0)</div><div><b>${pct(s.probabilities.payback_under_12m)}</b>P(payback<12m)</div></div>
-      <p class="muted">Monte Carlo, ${s.trials} trials. LTV/CAC p10–p90: ${s.distribution.ltv_cac ? `${s.distribution.ltv_cac.p10} – ${s.distribution.ltv_cac.p90}` : "—"}. Assumed (no evidence): ${s.assumed.join(", ") || "none"}.</p>`);
+      <div class="mc">${histo("LTV / CAC across " + s.trials + " simulated futures", s.histogram?.ltv_cac, 3, "target 3×")}
+      ${histo("Payback period (months)", s.histogram?.payback_months, 12, "12 months")}</div>
+      <p class="muted">Monte Carlo: every parameter is drawn from its low–likely–high range ${s.trials} times. LTV/CAC p10–p90: ${s.distribution.ltv_cac ? `${s.distribution.ltv_cac.p10} – ${s.distribution.ltv_cac.p90}` : "—"}. Assumed (no evidence): ${s.assumed.join(", ") || "none"}.</p>`);
     show(ec.simulation);
     let tm, pinned = {};
     P("economics").querySelectorAll("input[type=range]").forEach((r) => (r.oninput = () => {
       r.nextElementSibling.textContent = (+r.value).toFixed(r.dataset.k === "churn" ? 3 : 0); pinned[r.dataset.k] = +r.value;
       clearTimeout(tm); tm = setTimeout(async () => show(await post("/economics/simulate", { overrides: pinned })), 250);
     }));
+  }
+
+  function histo(title, h, mark, markLabel) {
+    if (!h || !h.counts?.length) return "";
+    const W = 420, H = 120, n = h.counts.length, max = Math.max(...h.counts), bw = W / n;
+    const xOf = (v) => ((v - h.lo) / ((h.hi - h.lo) || 1)) * W;
+    const bars = h.counts.map((c, i) => { const v = h.lo + (i + 0.5) * (h.hi - h.lo) / n; const bh = (c / max) * (H - 18);
+      return `<rect x="${i * bw + 1}" y="${H - bh - 14}" width="${bw - 2}" height="${bh}" class="${mark != null && v >= mark ? "ok" : ""}"/>`; }).join("");
+    const m = mark != null && mark >= h.lo && mark <= h.hi ? `<line x1="${xOf(mark)}" x2="${xOf(mark)}" y1="0" y2="${H - 14}"/><text x="${xOf(mark) + 4}" y="10">${markLabel}</text>` : "";
+    return `<figure><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${H}" class="hist">${bars}${m}
+      <text x="0" y="${H - 2}">${h.lo}</text><text x="${W}" y="${H - 2}" text-anchor="end">${h.hi}</text></svg></figure>`;
   }
 
   // ---------- what-if lab ----------

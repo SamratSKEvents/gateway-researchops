@@ -89,7 +89,21 @@ def simulate(params: dict, overrides: dict | None = None, trials: int = 2000, se
         xs = sorted(x[key] for x in sims if x[key] is not None)
         return {f"p{int(q * 100)}": round(xs[int(q * (len(xs) - 1))], 3) for q in qs} if xs else None
 
+    def hist(key, bins=24):
+        xs = sorted(x[key] for x in sims if x[key] is not None)
+        if not xs:
+            return None
+        lo, hi = xs[int(0.02 * (len(xs) - 1))], xs[int(0.98 * (len(xs) - 1))]       # trim 2% tails for a readable axis
+        if hi <= lo:
+            return {"lo": lo, "hi": hi, "counts": [len(xs)]}
+        w, counts = (hi - lo) / bins, [0] * bins
+        for x in xs:
+            if lo <= x <= hi:
+                counts[min(int((x - lo) / w), bins - 1)] += 1
+        return {"lo": round(lo, 3), "hi": round(hi, 3), "counts": counts}
+
     return {"base": {k: (round(v, 3) if v is not None else None) for k, v in base.items()},
+            "histogram": {"ltv_cac": hist("ltv_cac"), "payback_months": hist("payback_months")},
             "distribution": {"ltv_cac": pct("ltv_cac"), "payback_months": pct("payback_months"), "margin": pct("margin")},
             "probabilities": {"margin_positive": round(sum(x["margin"] > 0 for x in sims) / trials, 3),
                               "ltv_cac_above_3": round(sum((x["ltv_cac"] or 0) > 3 for x in sims) / trials, 3),
